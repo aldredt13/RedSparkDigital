@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from "react";
 import { Trash2, Plus, Pencil, X, Check, Star, LayoutGrid } from "lucide-react";
-import { supabase } from "@/lib/supabase"; // adjust path to your supabase client
+import { supabase } from "../../lib/supabase"; // adjust path to your supabase client
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { supabase } from "@/lib/supabase"; // adjust path if needed
+import { supabase } from "../../lib/supabase"; // adjust path if needed
 
 export const Route = createFileRoute("/admin/Login")({
   component: AdminLogin,
