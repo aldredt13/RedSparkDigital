@@ -2,9 +2,164 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- ═══════════════════════════════════════════════════════════
+         VIEWPORT & THEME
+         ════════════════════════════════════════════════════════ -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>redsparkdigital</title>
+
+    <!-- Tells browsers / PWAs what colour to use in the UI chrome -->
+    <meta name="theme-color" content="#E11D2E" />
+
+    <!-- Prevent phone number auto-detection -->
+    <meta name="format-detection" content="telephone=no" />
+
+
+    <!-- ═══════════════════════════════════════════════════════════
+         FAVICON / APP ICONS
+         ════════════════════════════════════════════════════════ -->
+    <link rel="icon"             type="image/x-icon"   href="/favicon.ico" />
+    <!--
+      Recommended: also add these if you have the assets:
+      <link rel="icon"             type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+      <link rel="icon"             type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+      <link rel="apple-touch-icon"                  sizes="180x180" href="/apple-touch-icon.png" />
+      <link rel="manifest"         href="/site.webmanifest" />
+    -->
+
+
+    <!-- ═══════════════════════════════════════════════════════════
+         PRIMARY SEO META TAGS
+         Search engines and social crawlers read these first.
+         Keep <title> under 60 chars, <description> under 160 chars.
+         ════════════════════════════════════════════════════════ -->
+    <title>RedSpark Digital — Software Repairs &amp; Web Design</title>
+
+    <meta
+      name="description"
+      content="Fast, affordable Software repairs and polished websites for small businesses. Based in Namibia — serving clients worldwide."
+    />
+
+    <!-- Comma-separated keywords (low direct ranking impact, but good for context) -->
+    <meta
+      name="keywords"
+      content="Software repair, computer repair, web design, website, small business, Namibia, Windhoek, IT support, Windows install"
+    />
+
+    <!-- Canonical URL — replace with your actual domain -->
+    <link rel="canonical" href="https://redsparkdigital.com/" />
+
+    <!-- Tell crawlers how to index the page -->
+    <meta name="robots" content="index, follow" />
+
+    <!-- Author -->
+    <meta name="author" content="RedSpark Digital" />
+
+
+    <!-- ═══════════════════════════════════════════════════════════
+         OPEN GRAPH  (Facebook, LinkedIn, WhatsApp, Slack, Discord,
+                      iMessage link previews, and most platforms)
+         ════════════════════════════════════════════════════════ -->
+    <meta property="og:type"        content="website" />
+    <meta property="og:site_name"   content="RedSpark Digital" />
+    <meta property="og:locale"      content="en_NA" />
+
+    <!-- Shown as the preview title on most platforms -->
+    <meta property="og:title"       content="RedSpark Digital — Software Repairs &amp; Web Design" />
+
+    <!-- 1–2 sentence hook shown under the title in previews -->
+    <meta
+      property="og:description"
+      content="Fast, affordable Software repairs and polished websites for small businesses. Based in Namibia — serving clients worldwide."
+    />
+
+    <!-- Full canonical URL of this page -->
+    <meta property="og:url"         content="https://redsparkdigital.com/" />
+
+    <!--
+      OG Image — shown as the large card image when sharing.
+      ● Recommended: 1200 × 630 px, JPEG or PNG, < 1 MB
+      ● Absolute URL required (relative paths don't work on most crawlers)
+      ● Replace with your own branded image
+    -->
+    <meta property="og:image"       content="https://i.imgur.com/SfOH3eV.png" />
+    <meta property="og:image:width"  content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt"    content="RedSpark Digital — Software Repairs &amp; Web Design" />
+    <meta property="og:image:type"   content="image/jpeg" />
+
+
+    <!-- ═══════════════════════════════════════════════════════════
+         TWITTER / X CARD
+         Controls how the link looks when pasted into a tweet or DM.
+         summary_large_image = big hero image + title + description
+         ════════════════════════════════════════════════════════ -->
+    <meta name="twitter:card"        content="summary_large_image" />
+    <meta name="twitter:site"        content="@redsparkdigital" />   <!-- your @handle, or remove this line -->
+    <meta name="twitter:creator"     content="@redsparkdigital" />   <!-- your @handle, or remove this line -->
+    <meta name="twitter:title"       content="RedSpark Digital — Software Repairs &amp; Web Design" />
+    <meta
+      name="twitter:description"
+      content="Fast, affordable Software repairs and polished websites for small businesses. Based in Namibia — serving clients worldwide."
+    />
+    <meta name="twitter:image"       content="https://i.imgur.com/SfOH3eV.png" />
+    <meta name="twitter:image:alt"   content="RedSpark Digital — Software Repairs &amp; Web Design" />
+
+
+    <!-- ═══════════════════════════════════════════════════════════
+         STRUCTURED DATA  (JSON-LD)
+         Helps Google show rich results (business info, star ratings).
+         Update the values to match your real business details.
+         ════════════════════════════════════════════════════════ -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "LocalBusiness",
+      "name": "RedSpark Digital",
+      "description": "Fast, affordable Software repairs and polished websites for small businesses.",
+      "url": "https://redsparkdigital.com",
+      "logo": "https://redsparkdigital.com/logo.png",
+      "image": "https://redsparkdigital.com/og-image.jpg",
+      "telephone": "+264-XX-XXX-XXXX",
+      "email": "hello@redsparkdigital.com",
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "Windhoek",
+        "addressRegion": "Khomas",
+        "addressCountry": "NA"
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": -22.5597,
+        "longitude": 17.0832
+      },
+      "openingHoursSpecification": [
+        {
+          "@type": "OpeningHoursSpecification",
+          "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday"],
+          "opens": "08:00",
+          "closes": "17:00"
+        }
+      ],
+      "priceRange": "N$$ – N$$$",
+      "currenciesAccepted": "NAD, USD",
+      "areaServed": "Worldwide",
+      "sameAs": [
+        "https://www.facebook.com/redsparkdigital",
+        "https://www.instagram.com/redsparkdigital",
+        "https://twitter.com/redsparkdigital"
+      ]
+    }
+    </script>
+
+
+    <!-- ═══════════════════════════════════════════════════════════
+         PERFORMANCE HINTS
+         Preconnect to domains your fonts/assets are loaded from.
+         ════════════════════════════════════════════════════════ -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
   </head>
   <body>
     <div id="root"></div>
