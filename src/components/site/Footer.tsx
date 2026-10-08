@@ -18,7 +18,7 @@ export function Footer() {
   const phoneHref = telLink(info.contact_phone, info.contact_phone_raw);
 
   return (
-    <footer className="border-t border-border/60 bg-card/40">
+    <footer data-where="footer" className="border-t border-border/60 bg-card/40">
       <div className="container mx-auto grid gap-10 px-4 py-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1.2fr]">
         {/* Brand */}
         <div>

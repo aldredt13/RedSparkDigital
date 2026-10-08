@@ -50,9 +50,9 @@ export type Submission = {
 
 export type Settings = Record<string, string>;
 
-export type AdminTab = "overview" | "submissions" | "projects" | "testimonials" | "pricing" | "notifications" | "site";
+export type AdminTab = "overview" | "analytics" | "submissions" | "projects" | "testimonials" | "pricing" | "notifications" | "site";
 
-export const ADMIN_TABS: AdminTab[] = ["overview", "submissions", "projects", "testimonials", "pricing", "notifications", "site"];
+export const ADMIN_TABS: AdminTab[] = ["overview", "analytics", "submissions", "projects", "testimonials", "pricing", "notifications", "site"];
 
 export type TableName = "projects" | "testimonials" | "pricing" | "submissions" | "settings";
 

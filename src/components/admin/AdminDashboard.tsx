@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Toaster, toast } from "sonner";
 import {
+  BarChart3,
   Bell,
   DollarSign,
   ExternalLink,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import logo from "../../assets/logo.png";
 import { supabase } from "../../lib/supabase";
+import { EXCLUDE_KEY } from "../../lib/analytics";
 import { cn } from "../../lib/utils";
 import { ConfirmProvider } from "./ConfirmProvider";
 import type { AdminData, AdminTab, PanelProps, Settings, TableName } from "./types";
@@ -26,6 +28,10 @@ import { TestimonialsPanel } from "./TestimonialsPanel";
 import { PricingPanel } from "./PricingPanel";
 import { NotificationsPanel } from "./NotificationsPanel";
 import { SiteInfoPanel } from "./SiteInfoPanel";
+import { Skeleton } from "./ui";
+
+// Charts are heavy — only load them when the Analytics tab is opened
+const AnalyticsPanel = lazy(() => import("./AnalyticsPanel"));
 
 const EMPTY: AdminData = { projects: [], testimonials: [], plans: [], features: [], submissions: [], settings: {} };
 
@@ -70,7 +76,13 @@ const ALL_TABLES: TableName[] = ["projects", "testimonials", "pricing", "submiss
 type NavItem = { key: AdminTab; label: string; icon: ComponentType<{ className?: string }> };
 
 const NAV: Array<{ group: string | null; items: NavItem[] }> = [
-  { group: null, items: [{ key: "overview", label: "Overview", icon: LayoutDashboard }] },
+  {
+    group: null,
+    items: [
+      { key: "overview", label: "Overview", icon: LayoutDashboard },
+      { key: "analytics", label: "Analytics", icon: BarChart3 },
+    ],
+  },
   { group: "Inbox", items: [{ key: "submissions", label: "Submissions", icon: Inbox }] },
   {
     group: "Content",
@@ -91,6 +103,7 @@ const NAV: Array<{ group: string | null; items: NavItem[] }> = [
 
 const PANELS: Record<AdminTab, ComponentType<PanelProps>> = {
   overview: OverviewPanel,
+  analytics: AnalyticsPanel,
   submissions: SubmissionsPanel,
   projects: ProjectsPanel,
   testimonials: TestimonialsPanel,
@@ -128,6 +141,12 @@ export function AdminDashboard({ tab, onTabChange }: { tab: AdminTab; onTabChang
   }, []);
 
   useEffect(() => {
+    // Don't count the admin's own browsing in site analytics (toggle lives in the Analytics tab)
+    try {
+      if (localStorage.getItem(EXCLUDE_KEY) === null) localStorage.setItem(EXCLUDE_KEY, "1");
+    } catch {
+      /* storage unavailable */
+    }
     reloadAll().finally(() => setLoading(false));
     supabase.auth.getUser().then(({ data: { user } }) => setEmail(user?.email ?? ""));
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
@@ -268,7 +287,12 @@ export function AdminDashboard({ tab, onTabChange }: { tab: AdminTab; onTabChang
             >
               <LogOut className="h-4 w-4" /> Sign out
             </button>
-            {email && <p className="truncate px-3 pt-1 text-[11px] text-muted-foreground/70">{email}</p>}
+            <p className="flex items-center justify-between gap-2 px-3 pt-1 text-[11px] text-muted-foreground/70">
+              <span className="truncate">{email}</span>
+              <span className="shrink-0 tabular-nums" title="Site version (see CHANGELOG.md)">
+                v{__APP_VERSION__}
+              </span>
+            </p>
           </div>
         </aside>
 
@@ -335,7 +359,9 @@ export function AdminDashboard({ tab, onTabChange }: { tab: AdminTab; onTabChang
 
           <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
             <div key={tab} className="animate-fade-in">
-              <Panel {...panelProps} />
+              <Suspense fallback={<Skeleton className="h-96 rounded-2xl" />}>
+                <Panel {...panelProps} />
+              </Suspense>
             </div>
           </main>
         </div>

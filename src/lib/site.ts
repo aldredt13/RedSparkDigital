@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
+import { track } from "./analytics";
 
 // ─── Site settings ────────────────────────────────────────────────────────────
 
@@ -160,6 +161,7 @@ let pendingSelection: string | null = null;
 /** Scroll to the contact form and pre-select a service, package or custom quote. */
 export function requestService(service: string) {
   pendingSelection = service;
+  track("service_request", { service });
   document.getElementById("contact")?.scrollIntoView({ behavior: "smooth", block: "start" });
   window.dispatchEvent(new CustomEvent(SELECT_EVENT, { detail: { service } }));
 }

@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { startAnalytics } from "../../lib/analytics";
 import { Navbar } from "./Navbar";
 import { Hero } from "./Hero";
 import { Services } from "./Services";
@@ -12,6 +14,7 @@ import { Footer } from "./Footer";
 import { FloatingWhatsApp } from "./FloatingWhatsApp";
 
 export function LandingPage() {
+  useEffect(startAnalytics, []);
   return (
     <div className="min-h-screen bg-background">
       <a

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X, ExternalLink, Star, ArrowUpRight, FolderOpen } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { track } from "../../lib/analytics";
 import { SectionHeader } from "./SectionHeader";
 
 type Project = {
@@ -172,7 +173,10 @@ export function Portfolio() {
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setSelected(p)}
+                onClick={() => {
+                  setSelected(p);
+                  track("project_view", { project: p.title });
+                }}
                 className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card text-left transition-all duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-(--shadow-card)"
               >
                 <Cover project={p} className="aspect-[16/10] w-full" />

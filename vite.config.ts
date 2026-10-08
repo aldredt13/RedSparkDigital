@@ -86,7 +86,10 @@ function seo(siteUrl: string): Plugin {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
+  const { version } = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'))
   return {
+    // Semantic version from package.json — see CHANGELOG.md
+    define: { __APP_VERSION__: JSON.stringify(version) },
     plugins: [
       supabaseKeyGuard(env),
       seo(resolveSiteUrl(env)),

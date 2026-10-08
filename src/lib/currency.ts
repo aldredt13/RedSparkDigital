@@ -88,11 +88,13 @@ function symbolFor(code: string): string {
 
 // ─── Detection ────────────────────────────────────────────────────────────────
 
-const CACHE_KEY = "rsd:currency:v2";
+const CACHE_KEY = "rsd:currency:v3";
 const PREF_KEY = "rsd:currency-pref";
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
-type Cached = { country: string | null; currency: Currency; ts: number };
+export type VisitorGeo = { country: string | null; region: string | null; city: string | null };
+
+type Cached = { geo: VisitorGeo; currency: Currency; ts: number };
 
 async function fetchWithTimeout(url: string, ms = 3000): Promise<Response> {
   const ctrl = new AbortController();
@@ -104,12 +106,16 @@ async function fetchWithTimeout(url: string, ms = 3000): Promise<Response> {
   }
 }
 
-const COUNTRY_PROVIDERS: Array<() => Promise<string | null>> = [
-  async () => (await (await fetchWithTimeout("https://get.geojs.io/v1/ip/country.json")).json()).country ?? null,
-  async () => (await (await fetchWithTimeout("https://api.country.is/")).json()).country ?? null,
+// First provider also gives region + city (used by the site analytics); the rest are country-only fallbacks
+const GEO_PROVIDERS: Array<() => Promise<Partial<VisitorGeo>>> = [
+  async () => {
+    const d = await (await fetchWithTimeout("https://get.geojs.io/v1/ip/geo.json")).json();
+    return { country: d.country_code ?? null, region: d.region ?? null, city: d.city ?? null };
+  },
+  async () => ({ country: (await (await fetchWithTimeout("https://api.country.is/")).json()).country ?? null }),
   async () => {
     const text = await (await fetchWithTimeout("https://www.cloudflare.com/cdn-cgi/trace")).text();
-    return /^loc=([A-Z]{2})$/m.exec(text)?.[1] ?? null;
+    return { country: /^loc=([A-Z]{2})$/m.exec(text)?.[1] ?? null };
   },
 ];
 
@@ -127,16 +133,17 @@ function countryFromBrowser(): string | null {
   return null;
 }
 
-async function detectCountry(): Promise<string | null> {
-  for (const provider of COUNTRY_PROVIDERS) {
+async function detectGeo(): Promise<VisitorGeo> {
+  for (const provider of GEO_PROVIDERS) {
     try {
-      const code = (await provider())?.toUpperCase();
-      if (code && /^[A-Z]{2}$/.test(code) && code !== "XX") return code;
+      const geo = await provider();
+      const code = geo.country?.toUpperCase();
+      if (code && /^[A-Z]{2}$/.test(code) && code !== "XX") return { country: code, region: geo.region ?? null, city: geo.city ?? null };
     } catch {
       /* try the next provider */
     }
   }
-  return countryFromBrowser();
+  return { country: countryFromBrowser(), region: null, city: null };
 }
 
 async function fetchUsdRate(code: string): Promise<number | null> {
@@ -156,7 +163,7 @@ function readCache(): Cached | null {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Cached;
-    if (Date.now() - parsed.ts > CACHE_TTL_MS || !parsed.currency?.code) return null;
+    if (Date.now() - parsed.ts > CACHE_TTL_MS || !parsed.currency?.code || !parsed.geo) return null;
     return parsed;
   } catch {
     return null;
@@ -171,18 +178,34 @@ function writeCache(value: Cached) {
   }
 }
 
-async function resolveLocalCurrency(): Promise<{ country: string | null; currency: Currency }> {
+async function resolveLocal(): Promise<{ geo: VisitorGeo; currency: Currency }> {
   const cached = readCache();
   if (cached) return cached;
 
-  const country = await detectCountry();
-  const code = (country && COUNTRY_CURRENCY[country]) || "USD";
+  const geo = await detectGeo();
+  const code = (geo.country && COUNTRY_CURRENCY[geo.country]) || "USD";
   const rate = await fetchUsdRate(code);
   const currency = rate ? { code, symbol: symbolFor(code), rate } : USD;
 
   // Only cache a successful conversion, so a flaky FX call is retried next visit
-  if (rate) writeCache({ country, currency, ts: Date.now() });
-  return { country, currency };
+  if (rate) writeCache({ geo, currency, ts: Date.now() });
+  return { geo, currency };
+}
+
+let detection: Promise<{ geo: VisitorGeo; currency: Currency }> | null = null;
+
+function detect() {
+  detection ??= resolveLocal();
+  return detection;
+}
+
+/** Visitor's approximate location — shares the single lookup used for currency. */
+export async function getVisitorGeo(): Promise<VisitorGeo> {
+  try {
+    return (await detect()).geo;
+  } catch {
+    return { country: null, region: null, city: null };
+  }
 }
 
 // ─── Shared store ─────────────────────────────────────────────────────────────
@@ -217,8 +240,8 @@ function start() {
     /* ignore */
   }
   setState({ status: "loading", preference });
-  resolveLocalCurrency()
-    .then(({ country, currency }) => setState({ status: "ready", country, local: currency }))
+  detect()
+    .then(({ geo, currency }) => setState({ status: "ready", country: geo.country, local: currency }))
     .catch(() => setState({ status: "ready" }));
 }
 

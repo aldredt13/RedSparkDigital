@@ -57,6 +57,7 @@ export function Navbar() {
 
   return (
     <header
+      data-where="navbar"
       className={`fixed inset-x-0 top-0 z-50 transition-[background-color,border-color,box-shadow] duration-300 ${
         scrolled || open
           ? "bg-background/85 backdrop-blur-xl border-b border-border/60 shadow-[0_8px_30px_-12px_rgb(0_0_0/0.5)]"

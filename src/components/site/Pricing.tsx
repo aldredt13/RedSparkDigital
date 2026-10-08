@@ -2,6 +2,7 @@ import { AlertCircle, ArrowRight, Check, MapPin, Sparkles } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
 import { formatPrice, formatUsd, useCurrency } from "../../lib/currency";
 import { CUSTOM_PACKAGE, packageValue, requestService, usePlans } from "../../lib/site";
+import { track } from "../../lib/analytics";
 
 export function Pricing() {
   const { plans, loading, error } = usePlans();
@@ -29,7 +30,10 @@ export function Pricing() {
                   <button
                     key={pref}
                     type="button"
-                    onClick={() => setPreference(pref)}
+                    onClick={() => {
+                      setPreference(pref);
+                      track("currency_toggle", { currency: pref === "local" ? local.code : "USD" });
+                    }}
                     aria-pressed={preference === pref}
                     className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
                       preference === pref ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"

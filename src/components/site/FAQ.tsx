@@ -1,6 +1,7 @@
 import { Plus } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
 import { useSiteInfo } from "../../lib/site";
+import { track } from "../../lib/analytics";
 
 function buildFaqs(location: string) {
   return [
@@ -64,6 +65,7 @@ export function FAQ() {
             <details
               key={f.q}
               open={i === 0}
+              onToggle={(e) => e.currentTarget.open && i !== 0 && track("faq_open", { question: f.q })}
               className="group rounded-2xl border border-border/60 bg-card/50 transition-colors open:border-primary/40 open:bg-card"
             >
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-left font-semibold [&::-webkit-details-marker]:hidden">

@@ -22,6 +22,7 @@ export function FloatingWhatsApp() {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Chat with us on WhatsApp"
+      data-where="floating"
       className={`group fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full bg-emerald-500 py-3 pl-3 pr-3 text-white shadow-[0_10px_30px_-8px_rgb(16_185_129/0.6)] transition-all duration-300 hover:bg-emerald-400 sm:pr-4 ${
         visible ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0"
       }`}

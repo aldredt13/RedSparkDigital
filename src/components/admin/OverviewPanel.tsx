@@ -1,9 +1,27 @@
-import { ArrowRight, Bell, CheckCircle2, Circle, DollarSign, Inbox, LayoutGrid, MessageSquareQuote, Plus, TrendingUp } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, BarChart3, Bell, CheckCircle2, Circle, DollarSign, Inbox, LayoutGrid, MessageSquareQuote, Plus, TrendingUp } from "lucide-react";
 import { isPackageValue, packageName } from "../../lib/site";
 import { cn } from "../../lib/utils";
 import type { AdminTab, PanelProps } from "./types";
 import { Badge, Button, Card, CardHeader, PageHeader, Skeleton } from "./ui";
 import { initials, relativeTime } from "./utils";
+import { AnalyticsNotInstalled, change, compact, fetchReport, type Report } from "./analytics/api";
+import { Delta, Sparkline } from "./analytics/mini";
+
+/** 7-day visitor snapshot for the overview; null = analytics not installed */
+function useTrafficSnapshot() {
+  const [snapshot, setSnapshot] = useState<Report | null | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    fetchReport("7d")
+      .then((r) => alive && setSnapshot(r))
+      .catch((e) => alive && setSnapshot(e instanceof AnalyticsNotInstalled ? null : undefined));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return snapshot;
+}
 
 function greeting() {
   const h = new Date().getHours();
@@ -11,6 +29,7 @@ function greeting() {
 }
 
 export function OverviewPanel({ data, loading, goTo }: PanelProps) {
+  const traffic = useTrafficSnapshot();
   const { submissions, projects, testimonials, plans, features, settings } = data;
   const unread = submissions.filter((s) => s.status === "unread").length;
   const weekAgo = Date.now() - 7 * 86400000;
@@ -36,6 +55,7 @@ export function OverviewPanel({ data, loading, goTo }: PanelProps) {
     { done: projects.length > 0, label: "Portfolio projects", detail: "Visitors currently see “Case studies coming soon”", tab: "projects", intent: "create", cta: "Add project" },
     { done: testimonials.length > 0, label: "Client testimonials", detail: "The reviews section stays hidden until you add one", tab: "testimonials", intent: "create", cta: "Add review" },
     { done: activePlans > 0 && features.length > 0, label: "Pricing packages", detail: "Plans with features listed", tab: "pricing", cta: "Review" },
+    { done: traffic !== null, label: "Website analytics", detail: traffic === null ? "Run supabase/sql/02_analytics.sql to start tracking" : "Tracking visits", tab: "analytics", cta: "Set up" },
     { done: socialsSet, label: "Social links", detail: "Show your profiles in the footer", tab: "site", cta: "Add links" },
   ];
   const done = checklist.filter((c) => c.done).length;
@@ -57,7 +77,29 @@ export function OverviewPanel({ data, loading, goTo }: PanelProps) {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <button
+          type="button"
+          onClick={() => goTo("analytics")}
+          className="group flex flex-col rounded-2xl border border-sky-500/30 bg-sky-500/[0.07] p-4 text-left transition-colors hover:border-sky-500/50"
+        >
+          <div className="flex items-center justify-between">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/15 text-sky-300">
+              <BarChart3 className="h-4 w-4" />
+            </span>
+            {traffic && <Delta value={change(traffic.totals.visitors, traffic.previous.visitors)} />}
+          </div>
+          {traffic === undefined ? (
+            <Skeleton className="mt-4 h-7 w-12" />
+          ) : (
+            <p className="mt-3 font-display text-2xl font-bold tabular-nums">{traffic ? compact(traffic.totals.visitors) : "—"}</p>
+          )}
+          <p className="mt-0.5 text-xs font-medium">Visitors · 7 days</p>
+          <p className="truncate text-[11px] text-muted-foreground">
+            {traffic === null ? "Set up analytics →" : traffic ? `${traffic.totals.pageviews.toLocaleString()} page views` : "…"}
+          </p>
+          {traffic && <Sparkline values={traffic.series.map((s) => s.visitors)} className="mt-2" />}
+        </button>
         {stats.map(({ label, value, sub, icon: Icon, tab, highlight }) => (
           <button
             key={label}

@@ -120,6 +120,7 @@ function AdminLogin() {
           <a href="/" className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground">
             <ArrowLeft className="h-3.5 w-3.5" /> Back to site
           </a>
+          <span className="mt-2 block text-[10px] text-muted-foreground/50">v{__APP_VERSION__}</span>
         </p>
       </div>
     </div>

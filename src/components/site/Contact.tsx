@@ -1,6 +1,7 @@
 import { Mail, Phone, Send, CheckCircle2, Loader2, MapPin, Clock, AlertCircle, Check, Package, Layers } from "lucide-react";
 import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "../../lib/supabase";
+import { track } from "../../lib/analytics";
 import { formatPrice, formatUsd, useCurrency } from "../../lib/currency";
 import {
   CUSTOM_PACKAGE,
@@ -108,6 +109,7 @@ export function Contact() {
     setErrors(found);
     const firstInvalid = (["name", "email", "service", "message"] as const).find((k) => found[k]);
     if (firstInvalid) {
+      track("contact_invalid", { fields: Object.keys(found).join(",") });
       document.getElementById(`${formId}-${firstInvalid}`)?.focus();
       return;
     }
@@ -124,6 +126,7 @@ export function Contact() {
           message: form.message.trim(),
         });
         if (error) throw new Error(error.message);
+        track("contact_submit", { service: form.service });
         // Discord alerts are sent by the database itself (see supabase/sql/01_security_and_notifications.sql)
       }
       setSent({ name: form.name.trim().split(" ")[0], service: form.service });
