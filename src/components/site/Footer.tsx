@@ -116,9 +116,14 @@ export function Footer() {
       <div className="border-t border-border/60">
         <div className="container mx-auto flex flex-wrap items-center justify-between gap-3 px-4 py-6 text-xs text-muted-foreground">
           <span>© {new Date().getFullYear()} RedSpark Digital. All rights reserved.</span>
-          <a href="#top" className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground">
-            Back to top <ArrowUp className="h-3.5 w-3.5" />
-          </a>
+          <span className="flex items-center gap-5">
+            <a href="/privacy" className="transition-colors hover:text-foreground">
+              Privacy policy
+            </a>
+            <a href="#top" className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground">
+              Back to top <ArrowUp className="h-3.5 w-3.5" />
+            </a>
+          </span>
         </div>
       </div>
     </footer>

@@ -240,12 +240,11 @@ export function track(name: string, props?: Props) {
 }
 
 function shouldTrack(): boolean {
-  const nav = navigator as Navigator & { globalPrivacyControl?: boolean };
   debug = read(DEBUG_KEY) === "1";
   if (read(EXCLUDE_KEY) === "1") return false;
   if (import.meta.env.DEV && !debug) return false;
-  if (nav.globalPrivacyControl === true || nav.doNotTrack === "1") return false;
-  if (nav.webdriver || /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|prerender|preview/i.test(nav.userAgent)) return false;
+  if (browserSignal()) return false;
+  if (navigator.webdriver || /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|prerender|preview/i.test(navigator.userAgent)) return false;
   return !!import.meta.env.VITE_SUPABASE_URL && !!API_KEY;
 }
 
@@ -331,6 +330,39 @@ function watchClicks() {
     },
     { capture: true },
   );
+}
+
+// ─── Visitor controls (privacy page) ──────────────────────────────────────────
+
+export type TrackingStatus = "tracked" | "opted-out" | "browser-signal";
+
+function browserSignal(): boolean {
+  const nav = navigator as Navigator & { globalPrivacyControl?: boolean };
+  return nav.globalPrivacyControl === true || nav.doNotTrack === "1";
+}
+
+/** What applies to this browser right now (client-side only). */
+export function trackingStatus(): { status: TrackingStatus; visitorId: string | null } {
+  if (browserSignal()) return { status: "browser-signal", visitorId: null };
+  if (read(EXCLUDE_KEY) === "1") return { status: "opted-out", visitorId: null };
+  return { status: "tracked", visitorId: read(VISITOR_KEY) };
+}
+
+/** Opting out stops tracking and forgets this browser's analytics ID. */
+export function setAnalyticsOptOut(optOut: boolean) {
+  try {
+    if (optOut) {
+      localStorage.setItem(EXCLUDE_KEY, "1");
+      localStorage.removeItem(VISITOR_KEY);
+      localStorage.removeItem(SESSION_KEY);
+      enabled = false;
+      queue.length = 0;
+    } else {
+      localStorage.removeItem(EXCLUDE_KEY);
+    }
+  } catch {
+    /* storage unavailable */
+  }
 }
 
 // ─── Start ────────────────────────────────────────────────────────────────────

@@ -15,14 +15,23 @@ function resolveSiteUrl(env: Record<string, string>): string {
 
 /**
  * Everything prefixed VITE_ ends up in the public JavaScript bundle. Refuse to
- * build if the Supabase key is a secret/service-role key — that key bypasses
- * every security rule in the database.
+ * build if the Supabase settings are missing, or if the key is a
+ * secret/service-role key — that key bypasses every security rule in the database.
  */
 function supabaseKeyGuard(env: Record<string, string>): Plugin {
   return {
     name: 'supabase-key-guard',
     apply: 'build',
     configResolved() {
+      const missing = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY'].filter((name) => !env[name]?.trim())
+      if (missing.length) {
+        throw new Error(
+          `\n\nMissing environment variable${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}.\n` +
+            'Vite only passes variables whose names start with VITE_ to the website, so the names must stay exactly\n' +
+            'VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (Vercel → Settings → Environment Variables), then redeploy.\n',
+        )
+      }
+
       const key = env.VITE_SUPABASE_ANON_KEY ?? ''
       let role = ''
       try {
@@ -78,6 +87,7 @@ function seo(siteUrl: string): Plugin {
           `<?xml version="1.0" encoding="UTF-8"?>\n` +
           `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
           `  <url>\n    <loc>${siteUrl}/</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n` +
+          `  <url>\n    <loc>${siteUrl}/privacy</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>yearly</changefreq>\n    <priority>0.3</priority>\n  </url>\n` +
           `</urlset>\n`,
       })
     },

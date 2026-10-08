@@ -391,7 +391,12 @@ export function Contact() {
                     </>
                   )}
                 </button>
-                <p className="text-center text-xs text-muted-foreground/60">We respect your privacy — your details are only used to reply to you.</p>
+                <p className="text-center text-xs text-muted-foreground/60">
+                  We respect your privacy — your details are only used to reply to you.{" "}
+                  <a href="/privacy" className="underline underline-offset-2 hover:text-foreground">
+                    Privacy policy
+                  </a>
+                </p>
               </form>
             )}
           </div>

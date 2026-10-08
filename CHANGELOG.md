@@ -17,6 +17,18 @@ The current version is shown at the bottom of the admin sidebar and on the admin
 
 ---
 
+## [2.2.0] — 2026-10-08
+
+### Added
+- **Privacy policy** page at `/privacy`: what's collected (contact form, visit statistics incl. IP and approximate location), why, who it's shared with (Supabase, Vercel, Discord, Google Fonts, location/exchange-rate services), browser storage used (no cookies), retention, and visitors' rights.
+- Visitors can **opt out of analytics** on the privacy page (also forgets their analytics ID), or copy their analytics ID to request deletion.
+- "Privacy policy" link in the footer and under the contact form.
+
+### Changed
+- The privacy page is prerendered to `privacy.html` with its own title, description and canonical URL, and listed in `sitemap.xml`.
+- Stopped tracking the TanStack Router plugin's temp folder (`.tanstack/`) in git.
+- The build now stops with a clear message if `VITE_SUPABASE_URL` or `VITE_SUPABASE_ANON_KEY` is missing or renamed (Vite only exposes `VITE_`-prefixed variables). Added `.env.example` documenting the required names.
+
 ## [2.1.0] — 2026-10-08
 
 ### Added
