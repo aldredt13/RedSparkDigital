@@ -6,8 +6,15 @@ import './index.css'
 
 const router = getRouter()
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <RouterProvider router={router} />
-  </StrictMode>,
-)
+// Resolve the first route (and its code-split chunk) before mounting, so the
+// prerendered landing page is swapped for the live one without a blank flash.
+router
+  .load()
+  .catch(() => {})
+  .finally(() => {
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode>
+        <RouterProvider router={router} />
+      </StrictMode>,
+    )
+  })

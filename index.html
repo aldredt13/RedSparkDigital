@@ -2,164 +2,124 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-
-    <!-- ═══════════════════════════════════════════════════════════
-         VIEWPORT & THEME
-         ════════════════════════════════════════════════════════ -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-    <!-- Tells browsers / PWAs what colour to use in the UI chrome -->
-    <meta name="theme-color" content="#E11D2E" />
-
-    <!-- Prevent phone number auto-detection -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1a1112" />
+    <meta name="color-scheme" content="dark" />
     <meta name="format-detection" content="telephone=no" />
 
-
-    <!-- ═══════════════════════════════════════════════════════════
-         FAVICON / APP ICONS
-         ════════════════════════════════════════════════════════ -->
-    <link rel="icon"             type="image/x-icon"   href="/favicon.ico" />
     <!--
-      Recommended: also add these if you have the assets:
-      <link rel="icon"             type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-      <link rel="icon"             type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-      <link rel="apple-touch-icon"                  sizes="180x180" href="/apple-touch-icon.png" />
-      <link rel="manifest"         href="/site.webmanifest" />
+      %SITE_URL% is replaced at build time (see vite.config.ts) with the live
+      domain — VITE_SITE_URL if set, otherwise Vercel's production domain.
     -->
 
-
-    <!-- ═══════════════════════════════════════════════════════════
-         PRIMARY SEO META TAGS
-         Search engines and social crawlers read these first.
-         Keep <title> under 60 chars, <description> under 160 chars.
-         ════════════════════════════════════════════════════════ -->
-    <title>RedSpark Digital — Software Repairs &amp; Web Design</title>
-
+    <!-- ── Primary SEO ───────────────────────────────────────────── -->
+    <title>Websites &amp; IT Support in Windhoek | RedSpark Digital</title>
     <meta
       name="description"
-      content="Fast, affordable Software repairs and polished websites for small businesses. Based in Namibia — serving clients worldwide."
+      content="Websites, PC setup, Windows installs and software support for homes and small businesses in Windhoek, Namibia. On-site or remote — get a free quote today."
     />
-
-    <!-- Comma-separated keywords (low direct ranking impact, but good for context) -->
-    <meta
-      name="keywords"
-      content="Software repair, computer repair, web design, website, small business, Namibia, Windhoek, IT support, Windows install"
-    />
-
-    <!-- Canonical URL — replace with your actual domain -->
-    <link rel="canonical" href="https://redsparkdigital.com/" />
-
-    <!-- Tell crawlers how to index the page -->
-    <meta name="robots" content="index, follow" />
-
-    <!-- Author -->
+    <meta name="keywords" content="web design Windhoek, website development Namibia, IT support Windhoek, PC setup, computer repair, Windows installation, software installation, Microsoft Office install" />
+    <link rel="canonical" href="%SITE_URL%/" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="author" content="RedSpark Digital" />
+    <meta name="geo.region" content="NA-KH" />
+    <meta name="geo.placename" content="Windhoek" />
+    <meta name="geo.position" content="-22.5597;17.0832" />
+    <meta name="ICBM" content="-22.5597, 17.0832" />
 
+    <!-- ── Icons ─────────────────────────────────────────────────── -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
 
-    <!-- ═══════════════════════════════════════════════════════════
-         OPEN GRAPH  (Facebook, LinkedIn, WhatsApp, Slack, Discord,
-                      iMessage link previews, and most platforms)
-         ════════════════════════════════════════════════════════ -->
-    <meta property="og:type"        content="website" />
-    <meta property="og:site_name"   content="RedSpark Digital" />
-    <meta property="og:locale"      content="en_NA" />
-
-    <!-- Shown as the preview title on most platforms -->
-    <meta property="og:title"       content="RedSpark Digital — Software Repairs &amp; Web Design" />
-
-    <!-- 1–2 sentence hook shown under the title in previews -->
-    <meta
-      property="og:description"
-      content="Fast, affordable Software repairs and polished websites for small businesses. Based in Namibia — serving clients worldwide."
-    />
-
-    <!-- Full canonical URL of this page -->
-    <meta property="og:url"         content="https://redsparkdigital.com/" />
-
-    <!--
-      OG Image — shown as the large card image when sharing.
-      ● Recommended: 1200 × 630 px, JPEG or PNG, < 1 MB
-      ● Absolute URL required (relative paths don't work on most crawlers)
-      ● Replace with your own branded image
-    -->
-    <meta property="og:image"       content="https://i.imgur.com/SfOH3eV.png" />
-    <meta property="og:image:width"  content="1200" />
+    <!-- ── Open Graph (Facebook, WhatsApp, LinkedIn, Discord…) ──── -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="RedSpark Digital" />
+    <meta property="og:locale" content="en_NA" />
+    <meta property="og:url" content="%SITE_URL%/" />
+    <meta property="og:title" content="RedSpark Digital — Websites &amp; IT Support in Windhoek" />
+    <meta property="og:description" content="Websites, PC setup, Windows installs and software support for homes and small businesses. On-site in Windhoek, remote across Namibia." />
+    <meta property="og:image" content="%SITE_URL%/og-image.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt"    content="RedSpark Digital — Software Repairs &amp; Web Design" />
-    <meta property="og:image:type"   content="image/jpeg" />
+    <meta property="og:image:alt" content="RedSpark Digital — reliable tech solutions for homes and businesses" />
 
+    <!-- ── Twitter / X ───────────────────────────────────────────── -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="RedSpark Digital — Websites &amp; IT Support in Windhoek" />
+    <meta name="twitter:description" content="Websites, PC setup, Windows installs and software support for homes and small businesses in Namibia." />
+    <meta name="twitter:image" content="%SITE_URL%/og-image.jpg" />
+    <meta name="twitter:image:alt" content="RedSpark Digital — reliable tech solutions for homes and businesses" />
 
-    <!-- ═══════════════════════════════════════════════════════════
-         TWITTER / X CARD
-         Controls how the link looks when pasted into a tweet or DM.
-         summary_large_image = big hero image + title + description
-         ════════════════════════════════════════════════════════ -->
-    <meta name="twitter:card"        content="summary_large_image" />
-    <meta name="twitter:site"        content="@redsparkdigital" />   <!-- your @handle, or remove this line -->
-    <meta name="twitter:creator"     content="@redsparkdigital" />   <!-- your @handle, or remove this line -->
-    <meta name="twitter:title"       content="RedSpark Digital — Software Repairs &amp; Web Design" />
-    <meta
-      name="twitter:description"
-      content="Fast, affordable Software repairs and polished websites for small businesses. Based in Namibia — serving clients worldwide."
-    />
-    <meta name="twitter:image"       content="https://i.imgur.com/SfOH3eV.png" />
-    <meta name="twitter:image:alt"   content="RedSpark Digital — Software Repairs &amp; Web Design" />
-
-
-    <!-- ═══════════════════════════════════════════════════════════
-         STRUCTURED DATA  (JSON-LD)
-         Helps Google show rich results (business info, star ratings).
-         Update the values to match your real business details.
-         ════════════════════════════════════════════════════════ -->
+    <!-- ── Structured data ───────────────────────────────────────── -->
     <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "LocalBusiness",
-      "name": "RedSpark Digital",
-      "description": "Fast, affordable Software repairs and polished websites for small businesses.",
-      "url": "https://redsparkdigital.com",
-      "logo": "https://redsparkdigital.com/logo.png",
-      "image": "https://redsparkdigital.com/og-image.jpg",
-      "telephone": "+264-XX-XXX-XXXX",
-      "email": "hello@redsparkdigital.com",
-      "address": {
-        "@type": "PostalAddress",
-        "addressLocality": "Windhoek",
-        "addressRegion": "Khomas",
-        "addressCountry": "NA"
-      },
-      "geo": {
-        "@type": "GeoCoordinates",
-        "latitude": -22.5597,
-        "longitude": 17.0832
-      },
-      "openingHoursSpecification": [
-        {
-          "@type": "OpeningHoursSpecification",
-          "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday"],
-          "opens": "08:00",
-          "closes": "17:00"
-        }
-      ],
-      "priceRange": "N$$ – N$$$",
-      "currenciesAccepted": "NAD, USD",
-      "areaServed": "Worldwide",
-      "sameAs": [
-        "https://www.facebook.com/redsparkdigital",
-        "https://www.instagram.com/redsparkdigital",
-        "https://twitter.com/redsparkdigital"
-      ]
-    }
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "%SITE_URL%/#website",
+            "url": "%SITE_URL%/",
+            "name": "RedSpark Digital",
+            "inLanguage": "en",
+            "publisher": { "@id": "%SITE_URL%/#business" }
+          },
+          {
+            "@type": "LocalBusiness",
+            "@id": "%SITE_URL%/#business",
+            "name": "RedSpark Digital",
+            "description": "Websites, PC setup, Windows installation and software support for homes and small businesses — on-site in Windhoek and remote across Namibia.",
+            "url": "%SITE_URL%/",
+            "logo": "%SITE_URL%/android-chrome-512x512.png",
+            "image": "%SITE_URL%/og-image.jpg",
+            "telephone": "+264818736612",
+            "email": "redsparkdigital@gmail.com",
+            "priceRange": "$$",
+            "currenciesAccepted": "NAD, USD",
+            "address": {
+              "@type": "PostalAddress",
+              "addressLocality": "Windhoek",
+              "addressRegion": "Khomas",
+              "addressCountry": "NA"
+            },
+            "geo": { "@type": "GeoCoordinates", "latitude": -22.5597, "longitude": 17.0832 },
+            "areaServed": [
+              { "@type": "City", "name": "Windhoek" },
+              { "@type": "Country", "name": "Namibia" }
+            ],
+            "openingHoursSpecification": [
+              {
+                "@type": "OpeningHoursSpecification",
+                "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+                "opens": "08:00",
+                "closes": "17:00"
+              }
+            ],
+            "hasOfferCatalog": {
+              "@type": "OfferCatalog",
+              "name": "Tech services",
+              "itemListElement": [
+                { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Website Development", "description": "Business websites, landing pages and custom dashboards." } },
+                { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "PC Setup & Optimization", "description": "Driver installation, system cleanup and performance tuning." } },
+                { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Windows Installation", "description": "Windows 10 / 11 fresh installs and upgrades with data backup." } },
+                { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Software Installation", "description": "Microsoft Office and general software setup and troubleshooting." } }
+              ]
+            }
+          }
+        ]
+      }
     </script>
 
-
-    <!-- ═══════════════════════════════════════════════════════════
-         PERFORMANCE HINTS
-         Preconnect to domains your fonts/assets are loaded from.
-         ════════════════════════════════════════════════════════ -->
+    <!-- ── Fonts ─────────────────────────────────────────────────── -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+    />
   </head>
   <body>
     <div id="root"></div>

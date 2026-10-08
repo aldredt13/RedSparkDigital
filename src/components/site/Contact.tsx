@@ -1,29 +1,22 @@
-/**
- * Contact.tsx — Enhanced UI
- *
- * Key input-visibility fixes:
- *  • Solid #1c1c1e dark background on every input — no transparency tricks
- *  • 1.5px #4a4a4a border at rest → bright primary on focus
- *  • White text (#f2f2f2) inside fields so typed text is always legible
- *  • Placeholder at 45% opacity so it's readable but clearly secondary
- *  • Hover state bumps border to #6a6a6a for tactile feedback
- *  • Focus adds 3px primary glow ring so active field is obvious
- *  • Select dropdown uses same solid bg — no OS default bleeding through
- *  • Textarea gets explicit pb-6 to give room for the char counter
- */
-
-import { Mail, MessageCircle, Phone, Send, CheckCircle2, Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Mail, Phone, Send, CheckCircle2, Loader2, MapPin, Clock, AlertCircle, Check, Package, Layers } from "lucide-react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "../../lib/supabase";
-
-// ─── Service options — keep in sync with Services.tsx ────────────────────────
-const SERVICE_OPTIONS = [
-  "Website Development",
-  "PC Setup & Optimization",
-  "Windows Installation",
-  "Software Installation",
-  "Other",
-];
+import { formatPrice, formatUsd, useCurrency } from "../../lib/currency";
+import {
+  CUSTOM_PACKAGE,
+  OTHER_SERVICE,
+  SERVICE_OPTIONS,
+  isPackageValue,
+  onServiceRequested,
+  packageName,
+  packageValue,
+  telLink,
+  usePlans,
+  useSiteInfo,
+  whatsappLink,
+} from "../../lib/site";
+import { IconWhatsApp } from "./icons";
+import { SectionHeader } from "./SectionHeader";
 
 type FormState = {
   name: string;
@@ -31,442 +24,413 @@ type FormState = {
   phone: string;
   service: string;
   message: string;
+  /** Honeypot — real visitors never see or fill this */
+  company: string;
 };
 
-const BLANK: FormState = {
-  name: "",
-  email: "",
-  phone: "",
-  service: SERVICE_OPTIONS[0],
-  message: "",
-};
+type Errors = Partial<Record<"name" | "email" | "service" | "message", string>>;
 
-// ─── Site info types + defaults ───────────────────────────────────────────────
+const BLANK: FormState = { name: "", email: "", phone: "", service: "", message: "", company: "" };
+const MESSAGE_MAX = 1000;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-type SiteSetting = { key: string; value: string };
-
-type SiteInfo = {
-  contact_email: string;
-  contact_phone: string;
-  contact_phone_raw: string;
-  discord_webhook_url: string;
-  discord_notifications_enabled: string;
-};
-
-const INFO_DEFAULTS: SiteInfo = {
-  contact_email:    "redsparkdigital@gmail.com",
-  contact_phone:    "+264 81 873 6612",
-  contact_phone_raw:"264818736612",
-  discord_webhook_url: "",
-  discord_notifications_enabled: "true",
-};
-
-// ─── postToDiscord — exact same helper as AdminDashboard ─────────────────────
-
-async function postToDiscord(webhookUrl: string, payload: object): Promise<void> {
-  const res = await fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new Error(`Discord webhook returned ${res.status}: ${text}`);
-  }
+function validate(f: FormState): Errors {
+  const errors: Errors = {};
+  if (!f.name.trim()) errors.name = "Please tell us your name.";
+  if (!f.email.trim()) errors.email = "We need an email address to reply to.";
+  else if (!EMAIL_RE.test(f.email.trim())) errors.email = "That email address doesn't look right.";
+  if (!f.service) errors.service = "Choose a service or package.";
+  if (f.message.trim().length < 10) errors.message = "Add a little more detail so we can help (10+ characters).";
+  return errors;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+function messagePlaceholder(service: string) {
+  if (service === CUSTOM_PACKAGE) return "Which services would you like combined? Any deadline or budget we should know about?";
+  if (isPackageValue(service)) return "Anything we should know about your setup or timeline?";
+  if (service === SERVICE_OPTIONS[0]) return "What's the website for? Do you have a domain or examples you like?";
+  return "Tell us what you need — the more detail, the better.";
+}
+
 export function Contact() {
+  const site = useSiteInfo();
+  const { plans } = usePlans();
+  const { currency } = useCurrency();
+  const formId = useId();
+
   const [form, setForm] = useState<FormState>(BLANK);
+  const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const selectRef = useRef<HTMLSelectElement>(null);
-  const [siteInfo, setSiteInfo] = useState<SiteInfo>(INFO_DEFAULTS);
+  const [sent, setSent] = useState<{ name: string; service: string } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [flashKey, setFlashKey] = useState(0);
 
-  // ── Fetch site settings on mount — same pattern as AdminDashboard.fetchAll ──
-  useEffect(() => {
-    supabase
-      .from("site_settings")
-      .select("key, value")
-      .then(({ data, error: fetchErr }) => {
-        if (fetchErr) { console.error("[Contact] site_settings fetch error:", fetchErr); return; }
-        if (!data) return;
-        const map: Record<string, string> = {};
-        (data as SiteSetting[]).forEach((s) => { map[s.key] = s.value; });
-
-        const webhookUrl = map["discord_webhook_url"]?.trim() ?? "";
-        console.log("[Contact] discord_webhook_url loaded:", webhookUrl ? "✓ set" : "⚠ empty");
-
-        setSiteInfo({
-          contact_email:    map["contact_email"]?.trim()     || INFO_DEFAULTS.contact_email,
-          contact_phone:    map["contact_phone"]?.trim()     || INFO_DEFAULTS.contact_phone,
-          contact_phone_raw:map["contact_phone_raw"]?.trim() || INFO_DEFAULTS.contact_phone_raw,
-          discord_webhook_url:           webhookUrl,
-          discord_notifications_enabled: map["discord_notifications_enabled"]?.trim() ?? "true",
-        });
-      });
-  }, []);
-
-  // Pre-select service when navigated from Services/Pricing cards
-  useEffect(() => {
-    function handleSelectService(e: Event) {
-      const { service } = (e as CustomEvent<{ service: string }>).detail;
-      if (SERVICE_OPTIONS.includes(service)) {
+  // Pre-select when a visitor clicks "Request this service" / "Choose package" elsewhere on the page
+  useEffect(
+    () =>
+      onServiceRequested((service) => {
+        setSent(null);
         setForm((f) => ({ ...f, service }));
-        if (selectRef.current) {
-          selectRef.current.classList.add("ci-highlight");
-          setTimeout(() => selectRef.current?.classList.remove("ci-highlight"), 900);
-        }
-      }
+        setErrors((e) => ({ ...e, service: undefined }));
+        setFlashKey((k) => k + 1);
+      }),
+    [],
+  );
+
+  const selectedPlan = useMemo(() => {
+    const name = packageName(form.service);
+    return name ? plans.find((p) => p.name === name) ?? null : null;
+  }, [form.service, plans]);
+
+  // Keep a pre-selected package visible even if it isn't in the loaded plan list
+  const packageOptions = useMemo(() => {
+    const opts = plans.map((p) => ({ value: packageValue(p.name), label: `${p.name} — from ${formatPrice(p.price_usd_cents, currency)}` }));
+    if (isPackageValue(form.service) && !opts.some((o) => o.value === form.service)) {
+      opts.push({ value: form.service, label: packageName(form.service) ?? form.service });
     }
-    window.addEventListener("redspark:select-service", handleSelectService);
-    return () => window.removeEventListener("redspark:select-service", handleSelectService);
-  }, []);
+    return opts;
+  }, [plans, currency, form.service]);
+
+  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((f) => ({ ...f, [key]: value }));
+    if (errors[key as keyof Errors]) setErrors((e) => ({ ...e, [key]: undefined }));
+  }
+
+  function onBlur(key: "name" | "email" | "message") {
+    const message = validate(form)[key];
+    // Only show blur errors for fields the visitor has started on
+    if (message && form[key].length > 0) setErrors((e) => ({ ...e, [key]: message }));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim() || !form.email.trim() || !form.message.trim()) return;
-    setSubmitting(true);
-    setError(null);
+    setSubmitError(null);
+    const found = validate(form);
+    setErrors(found);
+    const firstInvalid = (["name", "email", "service", "message"] as const).find((k) => found[k]);
+    if (firstInvalid) {
+      document.getElementById(`${formId}-${firstInvalid}`)?.focus();
+      return;
+    }
 
+    setSubmitting(true);
     try {
-      // 1. Save to Supabase
-      const { error: dbError } = await supabase
-        .from("contact_submissions")
-        .insert({
+      // Bots fill every field — quietly pretend it worked
+      if (!form.company) {
+        const { error } = await supabase.from("contact_submissions").insert({
           name: form.name.trim(),
           email: form.email.trim(),
           phone: form.phone.trim() || null,
           service: form.service,
           message: form.message.trim(),
         });
-
-      if (dbError) throw new Error(dbError.message);
-
-      // 2. Post to Discord — mirrors AdminDashboard.sendTestDiscordNotification exactly.
-      //    Uses siteInfo already loaded in state (same pattern as discordSettings in admin).
-      const webhookUrl = siteInfo.discord_webhook_url.trim();
-      const notificationsEnabled = siteInfo.discord_notifications_enabled !== "false";
-
-      console.log("[Contact] handleSubmit — webhook:", webhookUrl ? "✓ set" : "⚠ empty", "| enabled:", notificationsEnabled);
-
-      if (notificationsEnabled && webhookUrl) {
-        await postToDiscord(webhookUrl, {
-          embeds: [{
-            title: "📬 New Contact Form Submission",
-            color: 0xe05555,
-            fields: [
-              { name: "Name",    value: form.name.trim()             || "—", inline: true  },
-              { name: "Email",   value: form.email.trim()            || "—", inline: true  },
-              { name: "Service", value: form.service                 || "—", inline: true  },
-              { name: "Phone",   value: form.phone.trim()            || "—", inline: true  },
-              { name: "Message", value: form.message.trim().slice(0, 1024), inline: false },
-            ],
-            footer: { text: "RedSpark Digital · Contact Form" },
-            timestamp: new Date().toISOString(),
-          }],
-        });
-        console.log("[Contact] Discord notification sent ✓");
-      } else {
-        console.warn("[Contact] Discord skipped — webhook empty or notifications disabled.");
+        if (error) throw new Error(error.message);
+        // Discord alerts are sent by the database itself (see supabase/sql/01_security_and_notifications.sql)
       }
-
-      setSent(true);
+      setSent({ name: form.name.trim().split(" ")[0], service: form.service });
       setForm(BLANK);
+      setErrors({});
     } catch (err: unknown) {
-      console.error("[Contact] handleSubmit error:", err);
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      const msg = err instanceof Error ? err.message : "";
+      setSubmitError(
+        /too many messages/i.test(msg)
+          ? msg
+          : "Sorry — your message couldn't be sent. Please try again, or reach us on WhatsApp or email instead.",
+      );
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <section id="contact" className="py-24 md:py-32 relative overflow-hidden">
-      {/* Background glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 h-96 w-[600px] rounded-full bg-primary/15 blur-[140px] pointer-events-none" />
+    <section id="contact" aria-labelledby="contact-title" className="relative overflow-hidden py-24 md:py-32">
+      <div className="pointer-events-none absolute left-1/2 top-0 h-96 w-[600px] -translate-x-1/2 rounded-full bg-primary/15 blur-[140px]" aria-hidden />
 
-      <div className="container mx-auto px-4 relative">
-        {/* Header */}
-        <div className="max-w-2xl mx-auto text-center mb-14">
-          <span className="text-sm font-semibold text-accent uppercase tracking-wider">Contact</span>
-          <h2 className="mt-3 text-4xl md:text-5xl font-bold">Let's get your tech sorted</h2>
-          <p className="mt-4 text-muted-foreground text-lg">
-            Tell us what you need — we usually reply within hours.
-          </p>
-        </div>
+      <div className="container relative mx-auto px-4">
+        <SectionHeader
+          id="contact-title"
+          align="center"
+          eyebrow="Contact"
+          title="Let's get your tech sorted"
+          description="Tell us what you need — we usually reply within hours."
+        />
 
-        <div className="grid gap-6 md:grid-cols-5 max-w-5xl mx-auto items-start">
-
-          {/* ── Left: contact channels ── */}
-          <div className="md:col-span-2 space-y-3">
-            {siteInfo.contact_phone_raw && (
+        <div className="mx-auto grid max-w-6xl items-start gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+          {/* Channels */}
+          <div className="space-y-3">
+            {site.contact_phone_raw && (
               <ContactCard
-                href={`https://wa.me/${siteInfo.contact_phone_raw}`}
-                icon={<MessageCircle className="h-5 w-5" />}
+                href={whatsappLink(site.contact_phone_raw, "Hi RedSpark Digital, I'd like some help with…")}
+                icon={<IconWhatsApp className="h-5 w-5" />}
                 iconClass="bg-emerald-500/15 text-emerald-400"
                 label="WhatsApp"
                 value="Chat with us"
                 badge="Fastest reply"
               />
             )}
-            {siteInfo.contact_email && (
+            {site.contact_email && (
               <ContactCard
-                href={`mailto:${siteInfo.contact_email}`}
+                href={`mailto:${site.contact_email}`}
                 icon={<Mail className="h-5 w-5" />}
                 iconClass="bg-primary/15 text-primary"
                 label="Email"
-                value={siteInfo.contact_email}
+                value={site.contact_email}
               />
             )}
-            {siteInfo.contact_phone && (
+            {site.contact_phone && (
               <ContactCard
-                href={`tel:+${siteInfo.contact_phone_raw || siteInfo.contact_phone.replace(/[^\d]/g, "")}`}
+                href={telLink(site.contact_phone, site.contact_phone_raw)}
                 icon={<Phone className="h-5 w-5" />}
                 iconClass="bg-accent/15 text-accent"
                 label="Phone"
-                value={siteInfo.contact_phone}
+                value={site.contact_phone}
               />
             )}
 
-            <div className="rounded-xl border border-border/40 bg-card/40 backdrop-blur p-4">
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Based in <strong className="text-foreground/80">Windhoek, Namibia</strong> — serving
-                clients locally and across Southern Africa. Remote support available nationwide.
+            <div className="space-y-3 rounded-xl border border-border/50 bg-card/40 p-5 text-sm backdrop-blur">
+              <p className="flex items-start gap-3">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                <span className="text-muted-foreground">
+                  Based in <strong className="font-semibold text-foreground">{site.business_location}</strong> — on-site locally, remote
+                  support nationwide and across Southern Africa.
+                </span>
               </p>
+              {site.business_hours && (
+                <p className="flex items-start gap-3">
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                  <span className="text-muted-foreground">{site.business_hours}</span>
+                </p>
+              )}
             </div>
           </div>
 
-          {/* ── Right: form card ── */}
-          <div className="md:col-span-3 rounded-2xl border border-border/60 bg-(image:--gradient-card) backdrop-blur p-6 md:p-8 shadow-(--shadow-elegant)">
+          {/* Form */}
+          <div className="rounded-2xl border border-border/60 bg-(image:--gradient-card) p-6 shadow-(--shadow-elegant) backdrop-blur md:p-8">
             {sent ? (
-              <SuccessState onReset={() => setSent(false)} phoneRaw={siteInfo.contact_phone_raw} />
+              <SuccessState sent={sent} phoneRaw={site.contact_phone_raw} onReset={() => setSent(null)} />
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-
-                {/* Row 1: Name + Email */}
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField label="Your Name">
+              <form onSubmit={handleSubmit} className="space-y-5" noValidate aria-describedby={submitError ? `${formId}-error` : undefined}>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <Field id={`${formId}-name`} label="Your name" error={errors.name} required>
                     <input
-                      required
+                      id={`${formId}-name`}
                       maxLength={100}
                       value={form.name}
-                      onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                      className="ci"
-                      placeholder="John Doe"
+                      onChange={(e) => update("name", e.target.value)}
+                      onBlur={() => onBlur("name")}
+                      className="field-input"
+                      placeholder="Jane Doe"
                       autoComplete="name"
+                      aria-invalid={!!errors.name}
+                      aria-describedby={errors.name ? `${formId}-name-error` : undefined}
                     />
-                  </FormField>
-
-                  <FormField label="Email Address">
+                  </Field>
+                  <Field id={`${formId}-email`} label="Email address" error={errors.email} required>
                     <input
-                      required
+                      id={`${formId}-email`}
                       type="email"
+                      inputMode="email"
                       maxLength={255}
                       value={form.email}
-                      onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                      className="ci"
+                      onChange={(e) => update("email", e.target.value)}
+                      onBlur={() => onBlur("email")}
+                      className="field-input"
                       placeholder="you@email.com"
                       autoComplete="email"
+                      aria-invalid={!!errors.email}
+                      aria-describedby={errors.email ? `${formId}-email-error` : undefined}
                     />
-                  </FormField>
+                  </Field>
                 </div>
 
-                {/* Row 2: Phone + Service */}
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField label="Phone Number (optional)">
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <Field id={`${formId}-phone`} label="Phone / WhatsApp" hint="Optional">
                     <input
+                      id={`${formId}-phone`}
                       type="tel"
+                      inputMode="tel"
                       maxLength={30}
                       value={form.phone}
-                      onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                      className="ci"
+                      onChange={(e) => update("phone", e.target.value)}
+                      className="field-input"
                       placeholder="+264 81 000 0000"
                       autoComplete="tel"
                     />
-                  </FormField>
-
-                  <FormField label="Service Required">
-                    <div className="ci-wrap">
-                      <select
-                        ref={selectRef}
-                        value={form.service}
-                        onChange={(e) => setForm((f) => ({ ...f, service: e.target.value }))}
-                        className="ci ci-select"
-                      >
-                        {SERVICE_OPTIONS.map((opt) => (
-                          <option key={opt} value={opt}>{opt}</option>
+                  </Field>
+                  <Field id={`${formId}-service`} label="What do you need?" error={errors.service} required>
+                    <select
+                      key={flashKey}
+                      id={`${formId}-service`}
+                      value={form.service}
+                      onChange={(e) => update("service", e.target.value)}
+                      className={`field-input ${flashKey ? "flash-ring" : ""} ${form.service ? "" : "text-muted-foreground"}`}
+                      aria-invalid={!!errors.service}
+                      aria-describedby={errors.service ? `${formId}-service-error` : undefined}
+                    >
+                      <option value="" disabled>
+                        Choose a service or package…
+                      </option>
+                      <optgroup label="Services">
+                        {SERVICE_OPTIONS.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
                         ))}
-                      </select>
-                      {/* Custom chevron — sits above the select */}
-                      <div className="ci-chevron" aria-hidden>
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                          <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.75"
-                            strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </div>
-                    </div>
-                  </FormField>
+                      </optgroup>
+                      {packageOptions.length > 0 && (
+                        <optgroup label="Packages">
+                          {packageOptions.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      <optgroup label="Something else">
+                        <option value={CUSTOM_PACKAGE}>Custom package (mix &amp; match)</option>
+                        <option value={OTHER_SERVICE}>Something else</option>
+                      </optgroup>
+                    </select>
+                  </Field>
                 </div>
 
-                {/* Row 3: Message */}
-                <FormField label="Message">
-                  <div className="ci-wrap">
-                    <textarea
-                      required
-                      maxLength={1000}
-                      rows={5}
-                      value={form.message}
-                      onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
-                      className="ci ci-textarea"
-                      placeholder="Tell us what you need — the more detail, the better..."
-                    />
-                    <span className="ci-counter">{form.message.length}/1000</span>
-                  </div>
-                </FormField>
-
-                {/* Error */}
-                {error && (
-                  <div className="flex items-start gap-2.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                    <span className="mt-px shrink-0">⚠</span>
-                    {error}
+                {selectedPlan && (
+                  <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 animate-fade-in">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                          <Package className="h-4.5 w-4.5" />
+                        </span>
+                        <div>
+                          <p className="text-sm font-semibold">{selectedPlan.name}</p>
+                          <p className="text-xs text-muted-foreground">Starting price · final quote after assessment</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-display text-xl font-bold">{formatPrice(selectedPlan.price_usd_cents, currency)}</p>
+                        {currency.code !== "USD" && <p className="text-[11px] text-muted-foreground">≈ {formatUsd(selectedPlan.price_usd_cents)} USD</p>}
+                      </div>
+                    </div>
+                    {selectedPlan.features.length > 0 && (
+                      <ul className="mt-3 grid gap-1.5 border-t border-primary/15 pt-3 text-xs text-muted-foreground sm:grid-cols-2">
+                        {selectedPlan.features.slice(0, 6).map((f, i) => (
+                          <li key={`${i}-${f}`} className="flex items-start gap-1.5">
+                            <Check className="mt-px h-3.5 w-3.5 shrink-0 text-accent" />
+                            {f}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 )}
 
-                {/* Submit */}
+                {form.service === CUSTOM_PACKAGE && (
+                  <div className="flex items-start gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-4 text-sm animate-fade-in">
+                    <Layers className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <p className="text-muted-foreground">
+                      Tell us which services you'd like combined
+                      {plans.length > 0 && <> — or start from a package like “{plans[0].name}” and say what to add</>}. We'll send back a
+                      tailored quote.
+                    </p>
+                  </div>
+                )}
+
+                <Field id={`${formId}-message`} label="Message" error={errors.message} required>
+                  <div className="relative">
+                    <textarea
+                      id={`${formId}-message`}
+                      maxLength={MESSAGE_MAX}
+                      rows={5}
+                      value={form.message}
+                      onChange={(e) => update("message", e.target.value)}
+                      onBlur={() => onBlur("message")}
+                      className="field-input pb-7"
+                      placeholder={messagePlaceholder(form.service)}
+                      aria-invalid={!!errors.message}
+                      aria-describedby={errors.message ? `${formId}-message-error` : undefined}
+                    />
+                    <span
+                      className={`pointer-events-none absolute bottom-2.5 right-3.5 text-[11px] tabular-nums ${
+                        form.message.length > MESSAGE_MAX * 0.9 ? "text-warning" : "text-muted-foreground/60"
+                      }`}
+                    >
+                      {form.message.length}/{MESSAGE_MAX}
+                    </span>
+                  </div>
+                </Field>
+
+                {/* Honeypot */}
+                <div className="absolute -left-[9999px] h-px w-px overflow-hidden" aria-hidden>
+                  <label>
+                    Company
+                    <input tabIndex={-1} autoComplete="off" value={form.company} onChange={(e) => update("company", e.target.value)} />
+                  </label>
+                </div>
+
+                {submitError && (
+                  <div id={`${formId}-error`} role="alert" className="flex items-start gap-2.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    {submitError}
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-(image:--gradient-primary) px-5 py-3.5 text-sm font-semibold text-primary-foreground shadow-(--shadow-elegant) hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-(image:--gradient-primary) px-5 py-3.5 text-sm font-semibold text-primary-foreground shadow-(--shadow-elegant) transition-all duration-200 hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {submitting ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" />Sending…</>
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Sending…
+                    </>
                   ) : (
-                    <><Send className="h-4 w-4" />Send Message</>
+                    <>
+                      <Send className="h-4 w-4" /> Send message
+                    </>
                   )}
                 </button>
-
-                <p className="text-center text-xs text-muted-foreground/50">
-                  We respect your privacy. Your info is never shared.
-                </p>
+                <p className="text-center text-xs text-muted-foreground/60">We respect your privacy — your details are only used to reply to you.</p>
               </form>
             )}
           </div>
         </div>
       </div>
-
-      {/* ── Scoped input styles ── */}
-      <style>{`
-        /* ── Base input / textarea / select ────────────────────────────────── */
-        .ci {
-          width: 100%;
-          /* Solid opaque background — clearly distinct from the card surface */
-          background: #111113;
-          border: 1.5px solid #3d3d42;
-          border-radius: 0.625rem;
-          padding: 0.75rem 1rem;
-          font-size: 0.9375rem;
-          line-height: 1.5;
-          /* Always white so typed text is legible on the dark bg */
-          color: #f2f2f5;
-          outline: none;
-          font-family: inherit;
-          transition:
-            border-color 0.15s ease,
-            box-shadow   0.15s ease,
-            background   0.15s ease;
-        }
-
-        /* Placeholder — visible but clearly secondary */
-        .ci::placeholder {
-          color: rgba(255, 255, 255, 0.38);
-        }
-
-        /* Hover — border brightens so the field feels interactive */
-        .ci:hover {
-          border-color: #5c5c64;
-          background: #141416;
-        }
-
-        /* Focus — bright primary border + soft glow ring */
-        .ci:focus {
-          border-color: hsl(var(--primary));
-          box-shadow: 0 0 0 3px hsl(var(--primary) / 0.20);
-          background: #16161a;
-        }
-
-        /* Highlight flash when pre-selected by Services / Pricing */
-        .ci-highlight {
-          border-color: hsl(var(--primary)) !important;
-          box-shadow: 0 0 0 3px hsl(var(--primary) / 0.25) !important;
-        }
-
-        /* ── Select specific ─────────────────────────────────────────────── */
-        .ci-select {
-          /* Remove OS arrow so our custom chevron shows */
-          appearance: none;
-          -webkit-appearance: none;
-          /* Extra right padding so text doesn't overlap the chevron */
-          padding-right: 2.5rem;
-          cursor: pointer;
-        }
-
-        /* Dropdown options — solid dark bg, white text */
-        .ci-select option {
-          background: #1e1e22;
-          color: #f2f2f5;
-        }
-
-        /* ── Textarea specific ───────────────────────────────────────────── */
-        .ci-textarea {
-          resize: none;
-          /* Extra bottom padding so text never sits under the counter */
-          padding-bottom: 1.75rem;
-        }
-
-        /* ── Wrapper for select / textarea (positions overlay elements) ──── */
-        .ci-wrap {
-          position: relative;
-        }
-
-        /* Custom chevron for select */
-        .ci-chevron {
-          pointer-events: none;
-          position: absolute;
-          right: 0.875rem;
-          top: 50%;
-          transform: translateY(-50%);
-          color: rgba(255, 255, 255, 0.45);
-          display: flex;
-          align-items: center;
-        }
-
-        /* Character counter for textarea */
-        .ci-counter {
-          position: absolute;
-          bottom: 0.625rem;
-          right: 0.875rem;
-          font-size: 0.6875rem;
-          color: rgba(255, 255, 255, 0.3);
-          pointer-events: none;
-          font-variant-numeric: tabular-nums;
-          letter-spacing: 0.02em;
-        }
-      `}</style>
     </section>
   );
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  id,
+  label,
+  hint,
+  error,
+  required,
+  children,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  error?: string;
+  required?: boolean;
+  children: ReactNode;
+}) {
   return (
     <div className="space-y-2">
-      <label className="block text-xs font-bold text-white/60 uppercase tracking-widest">
-        {label}
+      <label htmlFor={id} className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-foreground/70">
+        <span>
+          {label}
+          {required && <span className="ml-0.5 text-primary">*</span>}
+        </span>
+        {hint && <span className="text-[10px] font-medium normal-case tracking-normal text-muted-foreground/70">{hint}</span>}
       </label>
       {children}
+      {error && (
+        <p id={`${id}-error`} className="flex items-center gap-1.5 text-xs text-red-300">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -480,28 +444,27 @@ function ContactCard({
   badge,
 }: {
   href: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   iconClass: string;
   label: string;
   value: string;
   badge?: string;
 }) {
+  const external = href.startsWith("http");
   return (
     <a
       href={href}
-      target={href.startsWith("http") ? "_blank" : undefined}
-      rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
-      className="relative flex items-center gap-4 rounded-xl border border-border/60 bg-card/60 backdrop-blur p-4 hover:border-primary/50 hover:bg-card/80 transition-all duration-200 group"
+      target={external ? "_blank" : undefined}
+      rel={external ? "noopener noreferrer" : undefined}
+      className="group flex items-center gap-4 rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur transition-all duration-200 hover:border-primary/50 hover:bg-card/80"
     >
-      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${iconClass} transition-transform group-hover:scale-110 duration-200`}>
-        {icon}
+      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${iconClass} transition-transform duration-200 group-hover:scale-110`}>{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs text-muted-foreground">{label}</span>
+        <span className="block truncate text-sm font-semibold">{value}</span>
       </span>
-      <div className="min-w-0">
-        <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="font-semibold text-sm truncate">{value}</div>
-      </div>
       {badge && (
-        <span className="absolute top-2 right-2 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+        <span className="shrink-0 rounded-full border border-emerald-500/20 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-400">
           {badge}
         </span>
       )}
@@ -509,38 +472,36 @@ function ContactCard({
   );
 }
 
-function SuccessState({ onReset, phoneRaw }: { onReset: () => void; phoneRaw: string }) {
+function SuccessState({ sent, phoneRaw, onReset }: { sent: { name: string; service: string }; phoneRaw: string; onReset: () => void }) {
+  const about = packageName(sent.service) ?? sent.service;
   return (
-    <div className="flex flex-col items-center justify-center py-10 text-center">
+    <div className="flex flex-col items-center justify-center py-10 text-center animate-pop-in" role="status">
       <div className="relative mb-6">
-        <div className="w-20 h-20 rounded-full bg-emerald-500/15 flex items-center justify-center">
-          <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/15">
+          <CheckCircle2 className="h-10 w-10 text-emerald-400" />
         </div>
-        <div
-          className="absolute inset-0 rounded-full border-2 border-emerald-500/30 animate-ping"
-          style={{ animationDuration: "1.5s" }}
-        />
+        <div className="absolute inset-0 animate-ping rounded-full border-2 border-emerald-500/30 [animation-duration:1.6s] [animation-iteration-count:2]" />
       </div>
-      <h3 className="text-2xl font-bold mb-2">Message Sent!</h3>
-      <p className="text-muted-foreground max-w-xs mb-6">
-        Thanks for reaching out. We'll be in touch within a few hours — usually much sooner.
+      <h3 className="text-2xl font-bold">Thanks{sent.name ? `, ${sent.name}` : ""}!</h3>
+      <p className="mt-2 max-w-sm text-muted-foreground">
+        Your enquiry about <strong className="text-foreground">{about}</strong> is in. We'll be in touch within a few hours — usually much sooner.
       </p>
-      <div className="flex items-center gap-3 flex-wrap justify-center">
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
         {phoneRaw && (
-        <a
-          href={`https://wa.me/${phoneRaw}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 px-4 py-2.5 text-sm font-semibold hover:bg-emerald-500/25 transition-colors"
-        >
-          <MessageCircle className="w-4 h-4" />
-          Follow up on WhatsApp
-        </a>
+          <a
+            href={whatsappLink(phoneRaw, `Hi RedSpark Digital, I just sent an enquiry about ${about}.`)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/25"
+          >
+            <IconWhatsApp className="h-4 w-4" />
+            Follow up on WhatsApp
+          </a>
         )}
         <button
           type="button"
           onClick={onReset}
-          className="rounded-lg border border-border/60 bg-card px-4 py-2.5 text-sm font-semibold text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+          className="rounded-lg border border-border/60 bg-card px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:border-border hover:text-foreground"
         >
           Send another
         </button>

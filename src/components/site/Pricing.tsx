@@ -1,262 +1,147 @@
-/**
- * Pricing.tsx — dynamic, DB-driven, currency-aware
- *
- * Changes from previous version:
- *  • "Get Started" button now deep-links to the Contact section AND
- *    pre-selects the closest matching service via the
- *    "redspark:select-service" CustomEvent (same mechanism as Services.tsx).
- *    Since pricing plan names don't map 1:1 to service options, the plan
- *    name is passed as the service value. Contact.tsx will gracefully fall
- *    through to "Other" if it's not an exact match — this is intentional
- *    so the form still has context (see note below).
- *
- *  NOTE: If you want pricing plans to pre-select specific services, name
- *  them exactly as they appear in SERVICE_OPTIONS in Contact.tsx, OR add
- *  an optional `contactService` field to each plan in the DB.
- *  For now, we pass plan.name so the admin sees which plan the client
- *  clicked — it arrives in the form's service field if it matches, or
- *  falls back gracefully.
- */
-
-import { useEffect, useState } from "react";
-import { Check, Loader2, AlertCircle, ArrowRight } from "lucide-react";
-import { supabase } from "../../lib/supabase";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type Plan = {
-  id: string;
-  name: string;
-  description: string;
-  highlight: boolean;
-  sort_order: number;
-  price_usd_cents: number;
-  features: string[];
-};
-
-type Currency = {
-  code: string;
-  symbol: string;
-  rate: number;
-};
-
-// ─── Currency symbol map ──────────────────────────────────────────────────────
-
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  USD: "$",  EUR: "€",  GBP: "£",  JPY: "¥",  AUD: "A$",
-  CAD: "C$", CHF: "Fr", CNY: "¥",  HKD: "HK$", SGD: "S$",
-  ZAR: "R",  NAD: "N$", BWP: "P",  ZMW: "ZK", MWK: "MK",
-  NGN: "₦",  GHS: "₵",  KES: "KSh", TZS: "TSh", UGX: "USh",
-  INR: "₹",  BRL: "R$", MXN: "MX$", AED: "AED", SAR: "SR",
-  NZD: "NZ$", SEK: "kr", NOK: "kr", DKK: "kr", PLN: "zł",
-  CZK: "Kč", HUF: "Ft", RON: "lei", TRY: "₺",  RUB: "₽",
-  IDR: "Rp", THB: "฿",  PHP: "₱",  MYR: "RM",  VND: "₫",
-  PKR: "₨",  BDT: "৳",  LKR: "Rs", EGP: "E£",  MAD: "MAD",
-  CLP: "CLP$", COP: "COL$", PEN: "S/.", ARS: "AR$", ILS: "₪",
-};
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function convertPrice(usdCents: number, rate: number): number {
-  const usd = usdCents / 100;
-  return Math.ceil(usd * rate);
-}
-
-function formatPrice(amount: number, currency: Currency): string {
-  return `${currency.symbol}${amount.toLocaleString()}`;
-}
-
-// ─── Data fetching ────────────────────────────────────────────────────────────
-
-async function detectCurrency(): Promise<Currency> {
-  try {
-    const geoRes = await fetch("https://ip-api.com/json/?fields=countryCode,currency", {
-      signal: AbortSignal.timeout(4000),
-    });
-    if (!geoRes.ok) throw new Error("geo failed");
-    const geo = await geoRes.json();
-    const currencyCode: string = geo.currency ?? "USD";
-
-    const fxRes = await fetch(`https://open.er-api.com/v6/latest/USD`, {
-      signal: AbortSignal.timeout(4000),
-    });
-    if (!fxRes.ok) throw new Error("fx failed");
-    const fx = await fxRes.json();
-    const rate: number = fx.rates?.[currencyCode] ?? 1;
-
-    return {
-      code: currencyCode,
-      symbol: CURRENCY_SYMBOLS[currencyCode] ?? currencyCode + " ",
-      rate,
-    };
-  } catch {
-    return { code: "USD", symbol: "$", rate: 1 };
-  }
-}
-
-async function fetchPlans(): Promise<Plan[]> {
-  const { data, error } = await supabase
-    .from("pricing_plans_full")
-    .select("*");
-  if (error) throw error;
-  return (data ?? []) as Plan[];
-}
-
-// ─── Navigation helper ────────────────────────────────────────────────────────
-
-/**
- * Scroll to #contact and pre-select the service matching the plan name.
- * Contact.tsx's SERVICE_OPTIONS are checked; if the plan name matches one
- * exactly (e.g. "Website Development") it will be pre-selected. Otherwise
- * "Other" remains selected — either way the scroll still happens.
- */
-function goToContact(planName: string) {
-  const contactEl = document.getElementById("contact");
-  if (contactEl) {
-    contactEl.scrollIntoView({ behavior: "smooth" });
-  }
-  setTimeout(() => {
-    window.dispatchEvent(
-      new CustomEvent("redspark:select-service", { detail: { service: planName } })
-    );
-  }, 80);
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
+import { AlertCircle, ArrowRight, Check, MapPin, Sparkles } from "lucide-react";
+import { SectionHeader } from "./SectionHeader";
+import { formatPrice, formatUsd, useCurrency } from "../../lib/currency";
+import { CUSTOM_PACKAGE, packageValue, requestService, usePlans } from "../../lib/site";
 
 export function Pricing() {
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [currency, setCurrency] = useState<Currency>({ code: "USD", symbol: "$", rate: 1 });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { plans, loading, error } = usePlans();
+  const { currency, local, ready, preference, setPreference } = useCurrency();
+  const showToggle = ready && local.code !== "USD";
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function init() {
-      try {
-        const [resolvedCurrency, resolvedPlans] = await Promise.all([
-          detectCurrency(),
-          fetchPlans(),
-        ]);
-        if (cancelled) return;
-        setCurrency(resolvedCurrency);
-        setPlans(resolvedPlans);
-      } catch (err: unknown) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Failed to load pricing.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    init();
-    return () => { cancelled = true; };
-  }, []);
+  const gridCols =
+    plans.length >= 3 ? "md:grid-cols-2 lg:grid-cols-3" : plans.length === 2 ? "md:grid-cols-2 max-w-4xl mx-auto" : "max-w-md mx-auto";
 
   return (
-    <section id="pricing" className="py-24 md:py-32">
+    <section id="pricing" aria-labelledby="pricing-title" className="relative py-24 md:py-32">
+      <div className="pointer-events-none absolute inset-x-0 top-1/3 -z-10 mx-auto h-96 max-w-3xl rounded-full bg-primary/10 blur-[140px]" aria-hidden />
+
       <div className="container mx-auto px-4">
-
-        {/* Header */}
-        <div className="max-w-2xl mb-16">
-          <span className="text-sm font-semibold text-accent uppercase tracking-wider">Pricing</span>
-          <h2 className="mt-3 text-4xl md:text-5xl font-bold">Straightforward packages</h2>
-          <p className="mt-4 text-muted-foreground text-lg">
-            Need something custom? Pricing varies — contact us for a tailored quote.
-          </p>
-
-          {!loading && currency.code !== "USD" && (
-            <p className="mt-2 text-sm text-muted-foreground/70">
-              Prices shown in <strong>{currency.code}</strong> based on your location.
-              All amounts are starting prices.
-            </p>
+        <SectionHeader
+          id="pricing-title"
+          eyebrow="Pricing"
+          title="Straightforward packages"
+          description="Clear starting prices for the most common jobs. Need something different? We'll build a custom package around you."
+        >
+          {showToggle && (
+            <div className="mt-6 flex flex-wrap items-center gap-3 text-sm">
+              <div className="inline-flex rounded-lg border border-border/60 bg-card/60 p-1" role="group" aria-label="Currency">
+                {(["local", "USD"] as const).map((pref) => (
+                  <button
+                    key={pref}
+                    type="button"
+                    onClick={() => setPreference(pref)}
+                    aria-pressed={preference === pref}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      preference === pref ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {pref === "local" ? local.code : "USD"}
+                  </button>
+                ))}
+              </div>
+              <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5" />
+                {preference === "local" ? `Shown in ${local.code} based on your location` : "Shown in US dollars"}
+              </span>
+            </div>
           )}
-        </div>
+        </SectionHeader>
 
-        {/* Loading skeleton */}
-        {loading && (
-          <div className="flex items-center justify-center py-24 gap-3 text-muted-foreground">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <span className="text-sm">Loading plans…</span>
+        {error && !loading && (
+          <div className="mb-8 flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-5 py-4 text-sm text-destructive">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>We couldn't load our packages right now — get in touch and we'll send you a quote.</span>
           </div>
         )}
 
-        {/* Error state */}
-        {!loading && error && (
-          <div className="flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-5 py-4 text-sm text-destructive">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
+        {loading ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-[30rem] animate-pulse rounded-2xl border border-border/60 bg-card/40" />
+            ))}
           </div>
-        )}
-
-        {/* Plan cards */}
-        {!loading && !error && (
-          <div className="grid gap-6 md:grid-cols-3">
-            {plans.map((p) => {
-              const convertedAmount = convertPrice(p.price_usd_cents, currency.rate);
-              const displayPrice = formatPrice(convertedAmount, currency);
-
-              return (
-                <div
+        ) : (
+          plans.length > 0 && (
+            <div className={`grid items-stretch gap-6 ${gridCols}`}>
+              {plans.map((p) => (
+                <article
                   key={p.id}
-                  className={`relative rounded-2xl border p-8 backdrop-blur transition-all ${
+                  className={`relative flex flex-col rounded-2xl border p-7 md:p-8 backdrop-blur transition-all duration-300 ${
                     p.highlight
-                      ? "border-primary/60 bg-(image:--gradient-card) shadow-(--shadow-elegant) md:scale-105"
-                      : "border-border/60 bg-card/50"
+                      ? "border-primary/60 bg-(image:--gradient-card) shadow-(--shadow-elegant) ring-1 ring-primary/30 lg:-translate-y-3"
+                      : "border-border/60 bg-card/50 hover:border-border"
                   }`}
                 >
                   {p.highlight && (
-                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-(image:--gradient-primary) px-3 py-1 text-xs font-bold text-primary-foreground">
-                      Most Popular
+                    <span className="absolute -top-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full bg-(image:--gradient-primary) px-3 py-1 text-xs font-bold text-primary-foreground shadow-(--shadow-glow)">
+                      <Sparkles className="h-3 w-3" /> Most popular
                     </span>
                   )}
 
                   <h3 className="text-xl font-semibold">{p.name}</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">{p.description}</p>
+                  {p.description && <p className="mt-2 text-sm text-muted-foreground">{p.description}</p>}
 
-                  <div className="mt-6 flex items-baseline gap-1">
-                    <span className="text-5xl font-bold font-display">{displayPrice}</span>
-                    <span className="text-muted-foreground text-sm">starting</span>
+                  <div className="mt-6">
+                    <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">From</span>
+                    <div className="mt-1 flex items-baseline gap-2">
+                      {ready ? (
+                        <span className="font-display text-4xl md:text-5xl font-bold tracking-tight">{formatPrice(p.price_usd_cents, currency)}</span>
+                      ) : (
+                        <span className="inline-block h-12 w-36 animate-pulse rounded-lg bg-muted" aria-label="Loading price" />
+                      )}
+                    </div>
+                    {ready && currency.code !== "USD" && (
+                      <p className="mt-1.5 text-xs text-muted-foreground/70">≈ {formatUsd(p.price_usd_cents)} USD</p>
+                    )}
                   </div>
 
-                  {currency.code !== "USD" && (
-                    <p className="mt-1 text-xs text-muted-foreground/60">
-                      ≈ ${(p.price_usd_cents / 100).toFixed(0)} USD
-                    </p>
-                  )}
-
-                  <ul className="mt-8 space-y-3">
-                    {p.features.map((f) => (
-                      <li key={f} className="flex items-start gap-3 text-sm">
-                        <Check className="mt-0.5 h-4 w-4 text-accent shrink-0" />
+                  <ul className="mt-7 flex-1 space-y-3 border-t border-border/50 pt-6">
+                    {p.features.map((f, i) => (
+                      <li key={`${i}-${f}`} className="flex items-start gap-3 text-sm">
+                        <span className="mt-0.5 flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-accent/15">
+                          <Check className="h-3 w-3 text-accent" />
+                        </span>
                         {f}
                       </li>
                     ))}
                   </ul>
 
-                  {/*
-                   * Deep-link to contact with this plan pre-selected as the service.
-                   * Uses a <button> instead of <a href="#contact"> so we can dispatch
-                   * the CustomEvent before the scroll completes.
-                   */}
                   <button
                     type="button"
-                    onClick={() => goToContact(p.name)}
-                    className={`mt-8 inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition-all group ${
+                    onClick={() => requestService(packageValue(p.name))}
+                    className={`group mt-8 inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-all ${
                       p.highlight
                         ? "bg-(image:--gradient-primary) text-primary-foreground hover:opacity-90"
-                        : "border border-border bg-card hover:bg-secondary"
+                        : "border border-border bg-card hover:border-primary/50 hover:bg-secondary"
                     }`}
                   >
-                    Get Started
-                    <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+                    Choose {p.name}
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </button>
-                </div>
-              );
-            })}
-          </div>
+                </article>
+              ))}
+            </div>
+          )
         )}
+
+        {/* Custom package */}
+        <div className="mt-10 flex flex-col items-start justify-between gap-6 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-6 md:flex-row md:items-center md:p-8">
+          <div className="max-w-2xl">
+            <h3 className="text-xl font-semibold">Need a custom package?</h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Mix and match services — say a new website plus PC setup for your office — and we'll put together a package and quote
+              that fits. Final prices are confirmed after a quick assessment.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => requestService(CUSTOM_PACKAGE)}
+            className="group inline-flex shrink-0 items-center gap-2 rounded-xl bg-foreground px-5 py-3 text-sm font-semibold text-background transition-opacity hover:opacity-90"
+          >
+            Build a custom package
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+          </button>
+        </div>
       </div>
     </section>
   );
