@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import { track } from "./analytics";
+import { initialData } from "./initial-data";
 
 // ─── Site settings ────────────────────────────────────────────────────────────
 
@@ -42,27 +43,32 @@ export const SITE_DEFAULTS: SiteInfo = {
 /** Keys visitors are allowed to read (matches the RLS policy). */
 export const PUBLIC_SETTING_KEYS = Object.keys(SITE_DEFAULTS) as Array<keyof SiteInfo>;
 
+/** Turn raw key → value settings into SiteInfo, filling gaps with defaults. */
+export function toSiteInfo(map: Record<string, string | null | undefined>): SiteInfo {
+  const info = { ...SITE_DEFAULTS };
+  for (const key of PUBLIC_SETTING_KEYS) {
+    const value = map[key]?.trim();
+    // Contact/business fields fall back to defaults; socials stay empty (= hidden)
+    if (key.startsWith("social_")) info[key] = value ?? "";
+    else if (value) info[key] = value;
+  }
+  return info;
+}
+
 let settingsPromise: Promise<SiteInfo> | null = null;
 
 function loadSiteInfo(): Promise<SiteInfo> {
   settingsPromise ??= (async () => {
     const { data, error } = await supabase.from("site_settings").select("key, value").in("key", PUBLIC_SETTING_KEYS);
-    if (error || !data) return SITE_DEFAULTS;
-    const map = Object.fromEntries(data.map((row: { key: string; value: string }) => [row.key, row.value?.trim() ?? ""]));
-    const info = { ...SITE_DEFAULTS };
-    for (const key of PUBLIC_SETTING_KEYS) {
-      const value = map[key];
-      // Contact/business fields fall back to defaults; socials stay empty (= hidden)
-      if (key.startsWith("social_")) info[key] = value ?? "";
-      else if (value) info[key] = value;
-    }
-    return info;
+    if (error || !data) return toSiteInfo(initialData().site ?? {});
+    return toSiteInfo(Object.fromEntries(data.map((row: { key: string; value: string }) => [row.key, row.value])));
   })();
   return settingsPromise;
 }
 
 export function useSiteInfo(): SiteInfo {
-  const [info, setInfo] = useState<SiteInfo>(SITE_DEFAULTS);
+  // Start from the build-time snapshot (matches the prerendered HTML), then refresh
+  const [info, setInfo] = useState<SiteInfo>(() => toSiteInfo(initialData().site ?? {}));
   useEffect(() => {
     let alive = true;
     loadSiteInfo().then((i) => alive && setInfo(i));
@@ -112,8 +118,8 @@ function loadPlans(): Promise<PublicPlan[]> {
 }
 
 export function usePlans() {
-  const [plans, setPlans] = useState<PublicPlan[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [plans, setPlans] = useState<PublicPlan[]>(() => (initialData().plans as PublicPlan[] | undefined) ?? []);
+  const [loading, setLoading] = useState(() => !initialData().plans);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;

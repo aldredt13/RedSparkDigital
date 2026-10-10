@@ -51,7 +51,7 @@ export function Pricing() {
           )}
         </SectionHeader>
 
-        {error && !loading && (
+        {error && !loading && plans.length === 0 && (
           <div className="mb-8 flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-5 py-4 text-sm text-destructive">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>We couldn't load our packages right now — get in touch and we'll send you a quote.</span>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { X, ExternalLink, Star, ArrowUpRight, FolderOpen } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { track } from "../../lib/analytics";
+import { initialData } from "../../lib/initial-data";
 import { SectionHeader } from "./SectionHeader";
 
 type Project = {
@@ -124,8 +125,8 @@ function ProjectDialog({ project, onClose }: { project: Project; onClose: () => 
 }
 
 export function Portfolio() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [projects, setProjects] = useState<Project[]>(() => (initialData().projects as Project[] | undefined) ?? []);
+  const [loading, setLoading] = useState(() => !initialData().projects);
   const [selected, setSelected] = useState<Project | null>(null);
   const closeDialog = useCallback(() => setSelected(null), []);
 

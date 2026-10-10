@@ -1,5 +1,5 @@
 import { ArrowUp, Mail, MapPin, Phone } from "lucide-react";
-import logo from "../../assets/logo.png";
+import logo from "../../assets/logo-128.webp";
 import { requestService, SERVICE_OPTIONS, telLink, useSiteInfo, whatsappLink } from "../../lib/site";
 import { IconWhatsApp, SOCIAL_LINKS } from "./icons";
 

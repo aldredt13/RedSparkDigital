@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ArrowLeft, Check, Copy, ShieldCheck } from "lucide-react";
-import logo from "../../assets/logo.png";
+import logo from "../../assets/logo-128.webp";
 import { setAnalyticsOptOut, trackingStatus, type TrackingStatus } from "../../lib/analytics";
 import { useSiteInfo, whatsappLink } from "../../lib/site";
 
-const PRIVACY_LAST_UPDATED = "8 October 2026";
+const PRIVACY_LAST_UPDATED = "10 October 2026";
 
 const SECTIONS = [
   ["who-we-are", "Who we are"],
@@ -204,7 +204,7 @@ export function PrivacyPage() {
                 <li>clicks on our WhatsApp, phone and email links, service and package buttons, FAQ questions and portfolio projects, and whether you sent the contact form;</li>
                 <li>the website or campaign link that brought you here;</li>
                 <li>your device type, browser, operating system, screen size, language and time zone; and</li>
-                <li>your <strong>IP address</strong> and the approximate location it suggests (country, region and city).</li>
+                <li>your <strong>IP address</strong>, the approximate location it suggests (country, region and city), and the name of your internet provider — which we use to filter out automated traffic from cloud servers.</li>
               </List>
               <p>
                 We don't record visits from browsers that send a Do Not Track or Global Privacy Control signal, or from known bots.
@@ -243,11 +243,8 @@ export function PrivacyPage() {
                   <strong>Discord</strong> — we receive a notification with the details of each contact form enquiry in a private Discord channel.
                 </li>
                 <li>
-                  <strong>Google Fonts</strong> — provides the website's fonts; your browser connects to Google to download them.
-                </li>
-                <li>
-                  <strong>GeoJS</strong> (with Country.is and Cloudflare as backups) and <strong>ExchangeRate-API</strong> — provide approximate location and
-                  exchange rates for local-currency prices.
+                  <strong>GeoJS</strong> (with Country.is and Cloudflare as backups) and <strong>ExchangeRate-API</strong> — provide approximate location,
+                  internet-provider name and exchange rates for local-currency prices and visit statistics.
                 </li>
               </List>
               <p>We may also disclose information if the law requires it, or to protect our rights or the safety of others.</p>

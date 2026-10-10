@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Quote, Star } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { initialData } from "../../lib/initial-data";
 import { SectionHeader } from "./SectionHeader";
 
 type Testimonial = {
@@ -12,8 +13,8 @@ type Testimonial = {
 };
 
 export function Testimonials() {
-  const [reviews, setReviews] = useState<Testimonial[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [reviews, setReviews] = useState<Testimonial[]>(() => (initialData().testimonials as Testimonial[] | undefined) ?? []);
+  const [loading, setLoading] = useState(() => !initialData().testimonials);
 
   useEffect(() => {
     supabase

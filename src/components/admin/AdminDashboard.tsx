@@ -14,7 +14,7 @@ import {
   MessageSquareQuote,
   RefreshCw,
 } from "lucide-react";
-import logo from "../../assets/logo.png";
+import logo from "../../assets/logo-128.webp";
 import { supabase } from "../../lib/supabase";
 import { EXCLUDE_KEY } from "../../lib/analytics";
 import { cn } from "../../lib/utils";

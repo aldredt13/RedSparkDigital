@@ -88,11 +88,12 @@ function symbolFor(code: string): string {
 
 // ─── Detection ────────────────────────────────────────────────────────────────
 
-const CACHE_KEY = "rsd:currency:v3";
+const CACHE_KEY = "rsd:currency:v4";
 const PREF_KEY = "rsd:currency-pref";
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
-export type VisitorGeo = { country: string | null; region: string | null; city: string | null };
+/** network = the visitor's ISP / network owner, used to recognise cloud-server bots */
+export type VisitorGeo = { country: string | null; region: string | null; city: string | null; network: string | null };
 
 type Cached = { geo: VisitorGeo; currency: Currency; ts: number };
 
@@ -110,7 +111,7 @@ async function fetchWithTimeout(url: string, ms = 3000): Promise<Response> {
 const GEO_PROVIDERS: Array<() => Promise<Partial<VisitorGeo>>> = [
   async () => {
     const d = await (await fetchWithTimeout("https://get.geojs.io/v1/ip/geo.json")).json();
-    return { country: d.country_code ?? null, region: d.region ?? null, city: d.city ?? null };
+    return { country: d.country_code ?? null, region: d.region ?? null, city: d.city ?? null, network: d.organization_name ?? null };
   },
   async () => ({ country: (await (await fetchWithTimeout("https://api.country.is/")).json()).country ?? null }),
   async () => {
@@ -138,12 +139,14 @@ async function detectGeo(): Promise<VisitorGeo> {
     try {
       const geo = await provider();
       const code = geo.country?.toUpperCase();
-      if (code && /^[A-Z]{2}$/.test(code) && code !== "XX") return { country: code, region: geo.region ?? null, city: geo.city ?? null };
+      if (code && /^[A-Z]{2}$/.test(code) && code !== "XX") {
+        return { country: code, region: geo.region ?? null, city: geo.city ?? null, network: geo.network ?? null };
+      }
     } catch {
       /* try the next provider */
     }
   }
-  return { country: countryFromBrowser(), region: null, city: null };
+  return { country: countryFromBrowser(), region: null, city: null, network: null };
 }
 
 async function fetchUsdRate(code: string): Promise<number | null> {
@@ -204,7 +207,7 @@ export async function getVisitorGeo(): Promise<VisitorGeo> {
   try {
     return (await detect()).geo;
   } catch {
-    return { country: null, region: null, city: null };
+    return { country: null, region: null, city: null, network: null };
   }
 }
 

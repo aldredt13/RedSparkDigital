@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   BarChart3,
+  Bot,
   Clock,
   Download,
   Eye,
   Flame,
   Globe,
+  Info,
   Laptop,
   Layers,
   Link2,
@@ -14,15 +16,14 @@ import {
   MapPin,
   MessageSquareText,
   MousePointerClick,
+  Network,
   Package,
   Search,
-  ShieldCheck,
   Smartphone,
   Table2,
   Tablet,
   Users,
 } from "lucide-react";
-import { EXCLUDE_KEY } from "../../lib/analytics";
 import { cn } from "../../lib/utils";
 import { Badge, Button, Card, CardHeader, EmptyState, PageHeader, Segmented, Skeleton, Switch } from "./ui";
 import { downloadCsv, relativeTime } from "./utils";
@@ -39,23 +40,27 @@ import {
   fetchLive,
   fetchReport,
   formatDuration,
+  labelNetworks,
   serviceLabel,
   visitorName,
-  visitorTag,
+  type IpRow,
   type Live,
   type RangeKey,
   type Report,
+  type VisitorRow,
 } from "./analytics/api";
 import { BarList, Heatmap, SplitMeter, TrafficChart } from "./analytics/charts";
 import { StatTile } from "./analytics/mini";
 import { METRIC_LABELS, VIZ, type Metric } from "./analytics/viz";
-import { DeviceIcon, VisitorDrawer } from "./analytics/VisitorDrawer";
+import { DeviceIcon, VisitorDrawer, type DrawerTarget } from "./analytics/VisitorDrawer";
+import { ExclusionsCard } from "./analytics/ExclusionsCard";
 
 const RANGE_STORAGE = "rsd:analytics-range";
+const BOTS_STORAGE = "rsd:analytics-hide-bots";
 
-function readExcluded() {
+function readHideBots() {
   try {
-    return localStorage.getItem(EXCLUDE_KEY) !== "0";
+    return localStorage.getItem(BOTS_STORAGE) !== "0";
   } catch {
     return true;
   }
@@ -80,17 +85,18 @@ export function AnalyticsPanel() {
   const [compare, setCompare] = useState(true);
   const [tableView, setTableView] = useState(false);
   const [sourceTab, setSourceTab] = useState<"sources" | "campaigns">("sources");
-  const [placeTab, setPlaceTab] = useState<"countries" | "cities">("countries");
+  const [placeTab, setPlaceTab] = useState<"countries" | "cities" | "networks">("countries");
   const [techTab, setTechTab] = useState<"browsers" | "os">("browsers");
   const [visitorQuery, setVisitorQuery] = useState("");
-  const [openVisitor, setOpenVisitor] = useState<string | null>(null);
-  const [excluded, setExcluded] = useState(readExcluded);
+  const [openTarget, setOpenTarget] = useState<DrawerTarget | null>(null);
+  const [hideBots, setHideBots] = useState(readHideBots);
+  const labelled = useRef(new Set<string>());
 
-  const load = useCallback(async (key: RangeKey) => {
+  const load = useCallback(async (key: RangeKey, hide: boolean) => {
     setLoading(true);
     setError(null);
     try {
-      setReport(await fetchReport(key));
+      setReport(await fetchReport(key, hide));
       setUpdatedAt(new Date());
       setNotInstalled(false);
     } catch (e) {
@@ -102,35 +108,41 @@ export function AnalyticsPanel() {
   }, []);
 
   useEffect(() => {
-    load(range);
+    load(range, hideBots);
     try {
       localStorage.setItem(RANGE_STORAGE, range);
+      localStorage.setItem(BOTS_STORAGE, hideBots ? "1" : "0");
     } catch {
       /* ignore */
     }
-  }, [range, load]);
+  }, [range, hideBots, load]);
+
+  // Visits recorded before network capture: look up their network once, so the bot filter can classify them
+  useEffect(() => {
+    if (!report?.ips || report.legacy) return;
+    const pending = report.ips.filter((r) => r.ip && r.network === null && !labelled.current.has(r.ip)).map((r) => r.ip!);
+    if (pending.length === 0) return;
+    pending.forEach((ip) => labelled.current.add(ip));
+    labelNetworks(pending)
+      .then((updated) => {
+        if (updated > 0) load(range, hideBots);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [report]);
 
   // Live visitors every 20s; full report refresh every 2 minutes (while the tab is visible)
   useEffect(() => {
     if (notInstalled) return;
-    const pollLive = () => !document.hidden && fetchLive().then(setLive).catch(() => {});
+    const pollLive = () => !document.hidden && fetchLive(hideBots).then(setLive).catch(() => {});
     pollLive();
     const liveTimer = window.setInterval(pollLive, 20_000);
-    const reportTimer = window.setInterval(() => !document.hidden && load(range), 120_000);
+    const reportTimer = window.setInterval(() => !document.hidden && load(range, hideBots), 120_000);
     return () => {
       window.clearInterval(liveTimer);
       window.clearInterval(reportTimer);
     };
-  }, [notInstalled, range, load]);
-
-  function toggleSelf(countMe: boolean) {
-    try {
-      localStorage.setItem(EXCLUDE_KEY, countMe ? "0" : "1");
-    } catch {
-      /* ignore */
-    }
-    setExcluded(!countMe);
-  }
+  }, [notInstalled, range, hideBots, load]);
 
   const rangeInfo = RANGES.find((r) => r.key === range)!;
 
@@ -143,7 +155,7 @@ export function AnalyticsPanel() {
           title="Analytics isn't switched on yet"
           description="Run supabase/sql/02_analytics.sql in the Supabase SQL editor (after 01_security_and_notifications.sql). Visits start appearing here as soon as people browse the site."
           action={
-            <Button onClick={() => load(range)} icon={<Activity className="h-4 w-4" />}>
+            <Button onClick={() => load(range, hideBots)} icon={<Activity className="h-4 w-4" />}>
               Check again
             </Button>
           }
@@ -175,18 +187,38 @@ export function AnalyticsPanel() {
           <Switch checked={compare} onChange={setCompare} ariaLabel="Compare with previous period" />
           Compare with previous period
         </label>
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground" title="Cloud servers, crawlers and link scanners (e.g. from WhatsApp, Facebook or email security tools)">
+          <Switch checked={hideBots} onChange={setHideBots} ariaLabel="Hide bots" disabled={report?.legacy} />
+          Hide bots
+          {report?.bots ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium">
+              <Bot className="h-3 w-3" />
+              {report.bots.toLocaleString()} bot visit{report.bots === 1 ? "" : "s"} {hideBots ? "hidden" : "included"}
+            </span>
+          ) : null}
+        </label>
         <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
           {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {updatedAt && `Updated ${updatedAt.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}`}
         </span>
       </div>
 
+      {report?.legacy && (
+        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-xs text-sky-100">
+          <Info className="mt-px h-4 w-4 shrink-0 text-sky-300" />
+          <span>
+            Run <code className="rounded bg-black/30 px-1">supabase/sql/03_analytics_ip_grouping.sql</code> to filter out bots and see full per-IP history. Until
+            then, visitors are grouped by IP from the top 100 browsers only.
+          </span>
+        </div>
+      )}
+
       {error && !report && (
         <EmptyState
           icon={<BarChart3 className="h-6 w-6" />}
           title="Couldn't load analytics"
           description={error}
-          action={<Button onClick={() => load(range)}>Try again</Button>}
+          action={<Button onClick={() => load(range, hideBots)}>Try again</Button>}
         />
       )}
 
@@ -284,18 +316,22 @@ export function AnalyticsPanel() {
                     options={[
                       { value: "countries", label: "Countries" },
                       { value: "cities", label: "Cities" },
+                      ...(report.networks ? [{ value: "networks" as const, label: "Networks" }] : []),
                     ]}
                   />
                 }
               />
               <div className="p-5">
                 <BarList
-                  unit="visitors"
-                  total={report.totals.visitors}
+                  unit={placeTab === "networks" ? "IP addresses" : "visitors"}
+                  total={placeTab === "networks" ? undefined : report.totals.visitors}
+                  empty={placeTab === "networks" ? "Network names appear for visits recorded from v2.3.0 onwards" : undefined}
                   items={
                     placeTab === "countries"
                       ? report.countries.map((c) => ({ key: c.label, label: countryName(c.label), value: c.value, icon: <Globe className="h-3.5 w-3.5" /> }))
-                      : report.cities.map((c) => ({ key: `${c.label}-${c.country}`, label: `${c.label}, ${countryName(c.country)}`, value: c.value, icon: <MapPin className="h-3.5 w-3.5" /> }))
+                      : placeTab === "cities"
+                        ? report.cities.map((c) => ({ key: `${c.label}-${c.country}`, label: `${c.label}, ${countryName(c.country)}`, value: c.value, icon: <MapPin className="h-3.5 w-3.5" /> }))
+                        : (report.networks ?? []).map((n) => ({ key: n.label, label: n.label, value: n.value, icon: <Network className="h-3.5 w-3.5" /> }))
                   }
                 />
               </div>
@@ -429,8 +465,12 @@ export function AnalyticsPanel() {
                           <DeviceIcon device={e.device} className="h-3.5 w-3.5" />
                         </span>
                         <span className="min-w-0 flex-1 truncate">
-                          <button type="button" className="font-semibold hover:text-primary" onClick={() => setOpenVisitor(e.visitor_id)}>
-                            {visitorName(e.visitor_id)}
+                          <button
+                            type="button"
+                            className="font-semibold hover:text-primary"
+                            onClick={() => setOpenTarget(e.ip ? { kind: "ip", ip: e.ip } : { kind: "visitor", id: e.visitor_id })}
+                          >
+                            {visitorName(e.ip ?? e.visitor_id)}
                           </button>{" "}
                           <span className="text-muted-foreground">
                             {e.type === "pageview" ? "opened the site" : (LIVE_LABELS[e.name ?? ""] ?? e.name)}
@@ -446,34 +486,19 @@ export function AnalyticsPanel() {
             </Card>
           </div>
 
-          <VisitorsTable report={report} query={visitorQuery} onQuery={setVisitorQuery} onOpen={setOpenVisitor} />
+          <IpTable report={report} query={visitorQuery} onQuery={setVisitorQuery} onOpen={setOpenTarget} />
 
-          <div className="flex flex-col gap-4 rounded-2xl border border-border/70 bg-card/40 p-5 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-start gap-3">
-              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                Visitors are identified by a random ID stored in their browser — no cookies or third-party trackers. IP addresses are deleted after 90 days and
-                all visit data after 13 months. Browsers that send “Do Not Track” or Global Privacy Control aren't tracked.
-              </p>
-            </div>
-            <label className="flex shrink-0 cursor-pointer items-center gap-3 text-sm">
-              <span>
-                <span className="block font-medium">Count my own visits</span>
-                <span className="block text-xs text-muted-foreground">{excluded ? "This browser is excluded" : "This browser is counted"}</span>
-              </span>
-              <Switch checked={!excluded} onChange={toggleSelf} ariaLabel="Count my own visits" />
-            </label>
-          </div>
+          <ExclusionsCard onChanged={() => load(range, hideBots)} />
         </div>
       )}
 
-      {openVisitor && (
+      {openTarget && (
         <VisitorDrawer
-          visitorId={openVisitor}
-          onClose={() => setOpenVisitor(null)}
+          target={openTarget}
+          onClose={() => setOpenTarget(null)}
           onForgotten={() => {
-            setOpenVisitor(null);
-            load(range);
+            setOpenTarget(null);
+            load(range, hideBots);
           }}
         />
       )}
@@ -584,35 +609,89 @@ function SeriesTable({ report, metric, compare }: { report: Report; metric: Metr
   );
 }
 
-// ─── Visitors table ───────────────────────────────────────────────────────────
+// ─── Visitors by IP address ───────────────────────────────────────────────────
 
-function VisitorsTable({ report, query, onQuery, onOpen }: { report: Report; query: string; onQuery: (q: string) => void; onOpen: (id: string) => void }) {
+/** Fallback before supabase/sql/03: merge the per-browser rows by IP on the client. */
+function groupVisitorsByIp(visitors: VisitorRow[]): IpRow[] {
+  const groups = new Map<string, IpRow>();
+  for (const v of visitors) {
+    const key = v.ip ?? `id:${v.visitor_id}`;
+    const g = groups.get(key);
+    const device = { device: v.device, browser: v.browser, os: v.os, visits: v.sessions };
+    if (!g) {
+      groups.set(key, {
+        key,
+        ip: v.ip,
+        network: null,
+        visits: v.sessions,
+        pageviews: v.pageviews,
+        browsers: 1,
+        duration_s: v.duration_s,
+        first_seen: v.first_seen,
+        last_seen: v.last_seen,
+        city: v.city,
+        country: v.country,
+        latest_visitor_id: v.visitor_id,
+        converted: v.converted,
+        contact_clicks: v.contact_clicks,
+        is_bot: false,
+        devices: [device],
+      });
+      continue;
+    }
+    g.visits += v.sessions;
+    g.pageviews += v.pageviews;
+    g.browsers += 1;
+    g.duration_s += v.duration_s;
+    g.converted ||= v.converted;
+    g.contact_clicks += v.contact_clicks;
+    if (v.first_seen < g.first_seen) g.first_seen = v.first_seen;
+    if (v.last_seen > g.last_seen) {
+      g.last_seen = v.last_seen;
+      g.latest_visitor_id = v.visitor_id;
+    }
+    const same = g.devices.find((d) => d.device === v.device && d.browser === v.browser && d.os === v.os);
+    if (same) same.visits += v.sessions;
+    else g.devices.push(device);
+  }
+  return [...groups.values()].sort((a, b) => b.visits - a.visits || b.pageviews - a.pageviews || b.last_seen.localeCompare(a.last_seen));
+}
+
+const deviceText = (d: { browser: string | null; os: string | null }) => `${d.browser ?? "Unknown"} · ${d.os ?? "Unknown"}`;
+
+function IpTable({ report, query, onQuery, onOpen }: { report: Report; query: string; onQuery: (q: string) => void; onOpen: (target: DrawerTarget) => void }) {
+  const all = useMemo(() => report.ips ?? groupVisitorsByIp(report.visitors), [report]);
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return report.visitors;
-    return report.visitors.filter((v) =>
-      [visitorName(v.visitor_id), v.visitor_id, v.ip ?? "", v.city ?? "", countryName(v.country), v.browser ?? "", v.os ?? "", v.device ?? ""].some((s) => s.toLowerCase().includes(q)),
+    if (!q) return all;
+    return all.filter((r) =>
+      [visitorName(r.key), r.ip ?? "", r.network ?? "", r.city ?? "", countryName(r.country), ...r.devices.map((d) => `${d.device} ${deviceText(d)}`)].some((s) =>
+        s.toLowerCase().includes(q),
+      ),
     );
-  }, [report.visitors, query]);
+  }, [all, query]);
+
+  const open = (r: IpRow) => onOpen(r.ip ? { kind: "ip", ip: r.ip } : { kind: "visitor", id: r.latest_visitor_id });
 
   function exportCsv() {
     downloadCsv(
-      `redspark-visitors-${new Date().toISOString().slice(0, 10)}.csv`,
-      rows.map((v) => ({
-        visitor: `${visitorName(v.visitor_id)} (${visitorTag(v.visitor_id)})`,
-        visitor_id: v.visitor_id,
-        visits: v.sessions,
-        page_views: v.pageviews,
-        time_on_site: formatDuration(v.duration_s),
-        city: v.city ?? "",
-        country: countryName(v.country),
-        device: v.device ?? "",
-        browser: v.browser ?? "",
-        os: v.os ?? "",
-        ip: v.ip ?? "",
-        enquired: v.converted ? "yes" : "no",
-        first_seen: v.first_seen,
-        last_seen: v.last_seen,
+      `redspark-visitors-by-ip-${new Date().toISOString().slice(0, 10)}.csv`,
+      rows.map((r) => ({
+        name: visitorName(r.key),
+        ip: r.ip ?? "",
+        network: r.network ?? "",
+        likely_bot: r.is_bot ? "yes" : "no",
+        visits: r.visits,
+        page_views: r.pageviews,
+        browsers: r.browsers,
+        devices: r.devices.map((d) => `${d.device ?? "unknown"}: ${deviceText(d)} (${d.visits})`).join("; "),
+        time_on_site: formatDuration(r.duration_s),
+        city: r.city ?? "",
+        country: countryName(r.country),
+        enquired: r.converted ? "yes" : "no",
+        first_seen: r.first_seen,
+        last_seen: r.last_seen,
       })),
     );
   }
@@ -621,8 +700,8 @@ function VisitorsTable({ report, query, onQuery, onOpen }: { report: Report; que
     <Card>
       <CardHeader
         icon={<Users className="h-4 w-4" />}
-        title="Visitors"
-        description="Most active visitors in this period · click one to see their full history"
+        title="Visitors by IP address"
+        description={`${all.length.toLocaleString()} IP address${all.length === 1 ? "" : "es"} in this period · one row per IP with every device it used · click for full history`}
         actions={
           <div className="flex items-center gap-2">
             <div className="relative">
@@ -631,9 +710,9 @@ function VisitorsTable({ report, query, onQuery, onOpen }: { report: Report; que
                 type="search"
                 value={query}
                 onChange={(e) => onQuery(e.target.value)}
-                placeholder="Name, IP, city…"
+                placeholder="IP, network, city, device…"
                 aria-label="Search visitors"
-                className="field-input h-8 w-44 py-0 pl-8 text-xs"
+                className="field-input h-8 w-52 py-0 pl-8 text-xs"
               />
             </div>
             <Button size="sm" icon={<Download className="h-3.5 w-3.5" />} onClick={exportCsv} disabled={rows.length === 0}>
@@ -643,16 +722,15 @@ function VisitorsTable({ report, query, onQuery, onOpen }: { report: Report; que
         }
       />
       {rows.length === 0 ? (
-        <p className="px-5 py-10 text-center text-sm text-muted-foreground">{report.visitors.length ? "No visitors match that search." : "No visitors in this period yet."}</p>
+        <p className="px-5 py-10 text-center text-sm text-muted-foreground">{all.length ? "No visitors match that search." : "No visitors in this period yet."}</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead className="text-left text-[11px] uppercase tracking-wider text-muted-foreground">
               <tr className="border-b border-border/60">
-                <th className="px-5 py-2.5 font-semibold">Visitor</th>
+                <th className="px-5 py-2.5 font-semibold">IP address</th>
                 <th className="px-3 py-2.5 font-semibold">Location</th>
-                <th className="px-3 py-2.5 font-semibold">Device</th>
-                <th className="px-3 py-2.5 font-semibold">IP address</th>
+                <th className="px-3 py-2.5 font-semibold">Devices used</th>
                 <th className="px-3 py-2.5 text-right font-semibold">Visits</th>
                 <th className="px-3 py-2.5 text-right font-semibold">Views</th>
                 <th className="px-3 py-2.5 text-right font-semibold">Time</th>
@@ -660,39 +738,52 @@ function VisitorsTable({ report, query, onQuery, onOpen }: { report: Report; que
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
-              {rows.map((v) => (
-                <tr key={v.visitor_id} onClick={() => onOpen(v.visitor_id)} className="cursor-pointer transition-colors hover:bg-secondary/40">
-                  <td className="px-5 py-2.5">
-                    <button type="button" className="text-left" onClick={() => onOpen(v.visitor_id)}>
-                      <span className="flex items-center gap-2">
-                        <span className="font-semibold">{visitorName(v.visitor_id)}</span>
-                        <span className="text-[11px] text-muted-foreground">{visitorTag(v.visitor_id)}</span>
-                      </span>
-                      <span className="mt-0.5 flex flex-wrap gap-1">
-                        {v.converted && <Badge tone="success">Enquired</Badge>}
-                        {v.contact_clicks > 0 && <Badge tone="info">Contacted</Badge>}
-                        {new Date(v.first_seen) < new Date(Date.now() - 86400000) && v.sessions > 1 && <Badge>Returning</Badge>}
+              {rows.map((r) => (
+                <tr key={r.key} onClick={() => open(r)} className={cn("cursor-pointer align-top transition-colors hover:bg-secondary/40", r.is_bot && "opacity-70")}>
+                  <td className="px-5 py-3">
+                    <button type="button" className="text-left" onClick={() => open(r)}>
+                      <span className="block font-semibold">{visitorName(r.key)}</span>
+                      <span className="block font-mono text-xs text-muted-foreground">{r.ip ?? "IP not stored"}</span>
+                      {r.network && <span className="block max-w-56 truncate text-[11px] text-muted-foreground/80">{r.network}</span>}
+                      <span className="mt-1 flex flex-wrap gap-1">
+                        {r.is_bot && (
+                          <Badge tone="warning">
+                            <Bot className="h-2.5 w-2.5" /> Bot
+                          </Badge>
+                        )}
+                        {r.converted && <Badge tone="success">Enquired</Badge>}
+                        {r.contact_clicks > 0 && <Badge tone="info">Contacted</Badge>}
+                        {r.visits > 1 && <Badge>Returning</Badge>}
                       </span>
                     </button>
                   </td>
-                  <td className="px-3 py-2.5">
-                    <span className="block truncate">{v.city ?? "—"}</span>
-                    <span className="block text-xs text-muted-foreground">{countryName(v.country)}</span>
+                  <td className="px-3 py-3">
+                    <span className="block">{r.city ?? "—"}</span>
+                    <span className="block text-xs text-muted-foreground">{countryName(r.country)}</span>
                   </td>
-                  <td className="px-3 py-2.5">
-                    <span className="flex items-center gap-2">
-                      <DeviceIcon device={v.device} className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>
-                        <span className="block">{v.browser ?? "—"}</span>
-                        <span className="block text-xs text-muted-foreground">{v.os ?? ""}</span>
+                  <td className="px-3 py-3">
+                    <ul className="space-y-1">
+                      {r.devices.slice(0, 3).map((d) => (
+                        <li key={`${d.device}-${d.browser}-${d.os}`} className="flex items-center gap-2">
+                          <DeviceIcon device={d.device} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{deviceText(d)}</span>
+                          <span className="ml-auto pl-2 text-xs tabular-nums text-muted-foreground">
+                            {d.visits} visit{d.visits === 1 ? "" : "s"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    {r.devices.length > 3 && <span className="text-xs text-muted-foreground">+{r.devices.length - 3} more</span>}
+                    {r.browsers > 1 && (
+                      <span className="mt-1 block text-[11px] text-muted-foreground" title="Different browsers/devices seen from this IP — could be one person, or several people sharing a network">
+                        {r.browsers} browsers on this IP
                       </span>
-                    </span>
+                    )}
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{v.ip ?? "—"}</td>
-                  <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{v.sessions}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{v.pageviews}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{formatDuration(v.duration_s)}</td>
-                  <td className="px-5 py-2.5 text-right text-xs text-muted-foreground">{relativeTime(v.last_seen)}</td>
+                  <td className="px-3 py-3 text-right font-semibold tabular-nums">{r.visits}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{r.pageviews}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{formatDuration(r.duration_s)}</td>
+                  <td className="px-5 py-3 text-right text-xs text-muted-foreground">{relativeTime(r.last_seen)}</td>
                 </tr>
               ))}
             </tbody>

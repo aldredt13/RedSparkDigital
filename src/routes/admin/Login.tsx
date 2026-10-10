@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AlertCircle, ArrowLeft, Eye, EyeOff, Loader2, Lock } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import logo from "../../assets/logo.png";
+import logo from "../../assets/logo-128.webp";
 
 export const Route = createFileRoute("/admin/Login")({
   validateSearch: (search: Record<string, unknown>): { denied?: boolean } => ({

@@ -17,6 +17,25 @@ The current version is shown at the bottom of the admin sidebar and on the admin
 
 ---
 
+## [2.3.0] — 2026-10-10
+
+### Added
+- **Visitors grouped by IP address** in Analytics — one row per IP with every device/browser it used (and visits per device), its network (ISP) name, and how many browsers share it. Clicking an IP shows its full history across devices. CSV export updated.
+- **Bot filtering** — the visitor's network name is now recorded; traffic from cloud, hosting and VPN-host networks (link scanners, crawlers) is flagged as a bot and hidden by default, with a "Hide bots" switch and a count of hidden bot visits. Older visits get their network looked up automatically when the dashboard opens.
+- **"Don't track me"** — exclude IP addresses from analytics entirely (blocked in the database, past visits deleted): one-click "Exclude my IP", a managed list, and "Don't track this IP" from an IP's history. Plus the existing per-browser switch.
+- Networks (ISP) tab under Locations.
+- Search engine verification without code changes: set `VITE_GOOGLE_SITE_VERIFICATION` / `VITE_BING_SITE_VERIFICATION` in Vercel.
+
+### Changed — SEO & speed
+- Live content (contact details, social links, packages, projects, reviews) is fetched at build time and baked into the prerendered HTML and structured data — search engines and link previews see real content, packages are listed as priced offers, and visitors no longer see a loading flash. Fresh data still loads in the browser.
+- Fonts are self-hosted and preloaded (no Google Fonts request).
+- Hero image converted to responsive WebP (136 KB → 17 KB on phones / 40 KB on desktop); logo 60 KB → 3 KB.
+- The pricing section no longer shows an error when the live fetch fails but packages are available.
+- Privacy policy updated: internet-provider name is collected for bot filtering; Google Fonts removed from third parties.
+
+### Database
+- Run `supabase/sql/03_analytics_ip_grouping.sql` (after 01 and 02). The dashboard works without it, but then groups only the top 100 browsers by IP and can't filter bots or exclude IPs.
+
 ## [2.2.0] — 2026-10-08
 
 ### Added

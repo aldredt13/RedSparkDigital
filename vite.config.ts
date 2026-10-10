@@ -53,7 +53,7 @@ function supabaseKeyGuard(env: Record<string, string>): Plugin {
  * Fills %SITE_URL% in index.html, emits robots.txt + sitemap.xml, and writes
  * app.html — a non-indexed copy of the SPA shell that vercel.json serves for /admin.
  */
-function seo(siteUrl: string): Plugin {
+function seo(siteUrl: string, env: Record<string, string>): Plugin {
   let isClientBuild = false
   let outDir = 'dist'
   return {
@@ -71,7 +71,17 @@ function seo(siteUrl: string): Plugin {
         .replace(/<title>[^<]*<\/title>/, '<title>Admin · RedSpark Digital</title>')
       fs.writeFileSync(path.join(outDir, 'app.html'), shell)
     },
-    transformIndexHtml: (html) => html.replaceAll('%SITE_URL%', siteUrl),
+    transformIndexHtml(html) {
+      // Search engine ownership tags — paste the codes into Vercel env vars, no code change needed
+      const verification = [
+        ['google-site-verification', env.VITE_GOOGLE_SITE_VERIFICATION],
+        ['msvalidate.01', env.VITE_BING_SITE_VERIFICATION],
+      ]
+        .filter(([, code]) => code?.trim())
+        .map(([name, code]) => `<meta name="${name}" content="${code.trim().replace(/"/g, '')}" />`)
+        .join('\n    ')
+      return html.replaceAll('%SITE_URL%', siteUrl).replace('</head>', verification ? `  ${verification}\n  </head>` : '</head>')
+    },
     generateBundle() {
       if (!isClientBuild) return
       const today = new Date().toISOString().slice(0, 10)
@@ -102,7 +112,7 @@ export default defineConfig(({ mode }) => {
     define: { __APP_VERSION__: JSON.stringify(version) },
     plugins: [
       supabaseKeyGuard(env),
-      seo(resolveSiteUrl(env)),
+      seo(resolveSiteUrl(env), env),
       TanStackRouterVite({ autoCodeSplitting: true }),
       react(),
       tailwindcss(),

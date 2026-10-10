@@ -1,4 +1,5 @@
-import heroImg from "../../assets/hero-tech.jpg";
+import heroLarge from "../../assets/hero-tech-1600.webp";
+import heroSmall from "../../assets/hero-tech-800.webp";
 import { ArrowRight, Code2, Cpu, MapPin, MonitorCog, Package, ShieldCheck, Timer, Wrench } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { IconWhatsApp } from "./icons";
@@ -165,7 +166,17 @@ export function Hero() {
     <section id="top" aria-labelledby="hero-title" className="relative isolate flex min-h-svh items-center overflow-hidden pt-24 pb-16 md:pt-28">
       {/* Background */}
       <div className="absolute inset-0 -z-10" aria-hidden>
-        <img src={heroImg} alt="" width={1920} height={1080} fetchPriority="high" className="h-full w-full object-cover opacity-35" />
+        <img
+          src={heroLarge}
+          srcSet={`${heroSmall} 800w, ${heroLarge} 1600w`}
+          sizes="100vw"
+          alt=""
+          width={1600}
+          height={900}
+          fetchPriority="high"
+          decoding="async"
+          className="h-full w-full object-cover opacity-35"
+        />
         <div className="absolute inset-0 bg-(image:--gradient-hero) opacity-85" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,oklch(0.6_0.22_25/0.18),transparent_60%)]" />
         <div className="absolute inset-0 bg-linear-to-b from-transparent via-background/20 to-background" />

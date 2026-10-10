@@ -386,7 +386,7 @@ export function startAnalytics() {
   // Wait (briefly) for the shared location lookup so events carry country/city
   const device = describeDevice();
   Promise.race([getVisitorGeo(), new Promise<null>((r) => setTimeout(() => r(null), 3000))]).then((geo) => {
-    baseContext = { ...device, country: geo?.country ?? null, region: geo?.region ?? null, city: geo?.city ?? null };
+    baseContext = { ...device, country: geo?.country ?? null, region: geo?.region ?? null, city: geo?.city ?? null, network: geo?.network ?? null };
     flush();
   });
 }
